@@ -116,6 +116,10 @@ pub fn workflow_routes() -> Router<AppState> {
             "/executions/:id/cancel",
             post(handlers::workflows::cancel_execution),
         )
+        .route(
+            "/executions/:id/reset",
+            post(handlers::workflows::reset_execution),
+        )
         // Execution listing, logs, and journal
         .route("/executions", get(handlers::workflows::list_executions))
         .route(

@@ -95,6 +95,12 @@ pub struct ExecutionStatusResponse {
     /// Workflow version
     pub workflow_version: String,
 
+    /// Namespace the execution runs in
+    pub namespace: String,
+
+    /// Task queue its tasks are dispatched on
+    pub task_queue: String,
+
     /// Current execution status
     pub status: ExecutionStatus,
 
@@ -164,6 +170,30 @@ pub struct ExecutionResultResponse {
     /// Execution statistics
     #[serde(skip_serializing_if = "Option::is_none")]
     pub statistics: Option<ExecutionStatistics>,
+}
+
+/// Request to reset an execution to a journal entry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResetExecutionRequest {
+    /// The journal entry to reset to: entries up to and including it are
+    /// kept, and the workflow runs again from there
+    pub target_event_id: i64,
+
+    /// Why, recorded in the journal
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// Response after resetting an execution
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResetExecutionResponse {
+    /// The execution that was reset
+    pub execution_id: String,
+
+    /// The new execution that runs from the journal entry
+    pub new_execution_id: String,
 }
 
 /// Response after cancelling an execution

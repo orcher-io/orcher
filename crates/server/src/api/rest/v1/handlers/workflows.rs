@@ -6,6 +6,7 @@
 use crate::api::rest::v1::models::workflows::{
     CancelExecutionResponse, ExecuteWorkflowRequest, ExecuteWorkflowResponse,
     ExecutionResultResponse, ExecutionStatusResponse, ListExecutionsResponse, LogEntry,
+    ResetExecutionRequest, ResetExecutionResponse,
 };
 use crate::error::Result;
 use crate::state::AppState;
@@ -319,6 +320,40 @@ pub async fn cancel_execution(
         .cancel_execution(&execution_id, query.reason)
         .await?;
 
+    Ok(Json(response))
+}
+
+/// Reset a workflow execution to a journal entry
+///
+/// # Request
+///
+/// POST /`api/v1/executions/{execution_id}/reset`
+///
+/// ```json
+/// { "targetEventId": 4, "reason": "retry after the fix" }
+/// ```
+///
+/// # Response
+///
+/// ```json
+/// { "executionId": "<the reset one>", "newExecutionId": "<the new run>" }
+/// ```
+///
+/// # Errors
+///
+/// - 400 Bad Request - The journal entry is not one of this execution's
+/// - 404 Not Found - Execution not found
+/// - 409 Conflict - The execution may not be reset now
+/// - 503 Service Unavailable - No engine to reset it
+pub async fn reset_execution(
+    State(state): State<AppState>,
+    Path(execution_id): Path<String>,
+    Json(request): Json<ResetExecutionRequest>,
+) -> Result<Json<ResetExecutionResponse>> {
+    let response = state
+        .workflow_service()
+        .reset_execution(&execution_id, request)
+        .await?;
     Ok(Json(response))
 }
 

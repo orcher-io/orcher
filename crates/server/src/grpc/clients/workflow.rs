@@ -41,8 +41,9 @@ use orcher_common::error::{OrcherError, OrcherResult};
 use orcher_proto::orcher::v1::workflow_service_client::WorkflowServiceClient as ProtoWorkflowServiceClient;
 use orcher_proto::orcher::v1::{
     CancelWorkflowRequest, GetWorkflowResultRequest, GetWorkflowStatusRequest,
-    QueryWorkflowRequest, SendEventRequest, SendEventWithStartWorkflowRequest,
-    StartWorkflowRequest, StartWorkflowResponse, TerminateWorkflowRequest, WorkflowStatus,
+    QueryWorkflowRequest, ResetWorkflowRequest, ResetWorkflowResponse, SendEventRequest,
+    SendEventWithStartWorkflowRequest, StartWorkflowRequest, StartWorkflowResponse,
+    TerminateWorkflowRequest, WorkflowStatus,
 };
 use serde_json::Value as JsonValue;
 use std::time::Duration;
@@ -308,6 +309,28 @@ impl WorkflowServiceClient {
     /// # Errors
     ///
     /// Returns an error if the workflow cannot be canceled.
+    /// Reset an execution to a journal entry: the engine keeps the entries up
+    /// to and including `target_event_id` and runs the workflow again from
+    /// there, as a new execution. Returns the engine's status as it is, so a
+    /// caller can tell a bad request from a failure.
+    pub async fn reset_workflow(
+        &self,
+        execution_id: &str,
+        namespace: &str,
+        target_event_id: i64,
+        reason: String,
+    ) -> Result<ResetWorkflowResponse, tonic::Status> {
+        let request = ResetWorkflowRequest {
+            execution_id: execution_id.to_string(),
+            namespace: namespace.to_string(),
+            target_event_id,
+            reason,
+            ..Default::default()
+        };
+        let mut client = self.client.clone();
+        Ok(client.reset_workflow(request).await?.into_inner())
+    }
+
     pub async fn cancel_workflow(
         &self,
         workflow_id: &str,

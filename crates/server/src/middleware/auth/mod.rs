@@ -1,6 +1,5 @@
 //! Authentication middleware.
 
-pub mod config;
 pub mod context;
 pub mod errors;
 
