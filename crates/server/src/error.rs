@@ -296,74 +296,38 @@ impl ServerError {
                 suggestion: Some("Please check your input and try again".to_string()),
                 action: None,
             }),
-            Self::Unauthorized(msg) if msg.contains("Email address not verified") => {
-                Some(ErrorDetails {
-                    field: Some("email_verified".to_string()),
-                    message: "Your email address has not been verified yet.".to_string(),
-                    suggestion: Some(
-                        "Check your inbox for a verification email or request a new one."
-                            .to_string(),
-                    ),
-                    action: Some(ErrorAction {
-                        action_type: "resend_verification".to_string(),
-                        endpoint: Some("/api/v1/auth/resend-verification".to_string()),
-                        method: Some("POST".to_string()),
-                        data: None,
-                    }),
-                })
-            }
+            // The engine authenticates API keys and tokens from an identity
+            // provider; it has no login of its own to point a caller at.
             Self::Unauthorized(msg) if msg.contains("Authentication required") => {
                 Some(ErrorDetails {
                     field: Some("authorization".to_string()),
-                    message: "No authentication token provided.".to_string(),
+                    message: "No credential was sent.".to_string(),
                     suggestion: Some(
-                        "Include a Bearer token in the Authorization header: 'Authorization: Bearer <your-token>'"
+                        "Send an API key or a token as 'Authorization: Bearer <credential>'. \
+                         An administrator creates API keys with `orcher api-key create`."
                             .to_string(),
                     ),
-                    action: Some(ErrorAction {
-                        action_type: "login".to_string(),
-                        endpoint: Some("/api/v1/auth/login".to_string()),
-                        method: Some("POST".to_string()),
-                        data: Some(serde_json::json!({
-                            "email": "your-email@example.com",
-                            "password": "your-password"
-                        })),
-                    }),
+                    action: None,
                 })
             }
-            Self::Unauthorized(msg) if msg.contains("token has expired") => {
-                Some(ErrorDetails {
-                    field: Some("token".to_string()),
-                    message: "Your authentication token has expired.".to_string(),
-                    suggestion: Some(
-                        "Your session has timed out. Please login again to continue."
-                            .to_string(),
-                    ),
-                    action: Some(ErrorAction {
-                        action_type: "login".to_string(),
-                        endpoint: Some("/api/v1/auth/login".to_string()),
-                        method: Some("POST".to_string()),
-                        data: Some(serde_json::json!({
-                            "email": "your-email@example.com",
-                            "password": "your-password"
-                        })),
-                    }),
-                })
-            }
+            Self::Unauthorized(msg) if msg.contains("token has expired") => Some(ErrorDetails {
+                field: Some("authorization".to_string()),
+                message: "The token has expired.".to_string(),
+                suggestion: Some(
+                    "Get a new token from your identity provider, or use an API key.".to_string(),
+                ),
+                action: None,
+            }),
             Self::Unauthorized(msg) if msg.contains("Authentication failed") => {
                 Some(ErrorDetails {
-                    field: Some("token".to_string()),
+                    field: Some("authorization".to_string()),
                     message: msg.clone(),
                     suggestion: Some(
-                        "Your token is invalid or malformed. Please login again."
+                        "The credential was not accepted: check that the API key is active \
+                         and unrevoked, or that the token is from the configured issuer."
                             .to_string(),
                     ),
-                    action: Some(ErrorAction {
-                        action_type: "login".to_string(),
-                        endpoint: Some("/api/v1/auth/login".to_string()),
-                        method: Some("POST".to_string()),
-                        data: None,
-                    }),
+                    action: None,
                 })
             }
             Self::Orcher(OrcherError::Validation { field, message, .. }) => Some(ErrorDetails {
@@ -494,6 +458,27 @@ impl IntoResponse for ServerError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The engine has no login: an authentication failure says how to send a
+    /// credential, never where to post an email and a password.
+    #[test]
+    fn authentication_errors_point_at_credentials_not_a_login() {
+        for error in [
+            ServerError::Unauthorized("Authentication required".to_string()),
+            ServerError::Unauthorized("token has expired".to_string()),
+            ServerError::Unauthorized("Authentication failed: unknown key".to_string()),
+        ] {
+            let details = error
+                .details()
+                .expect("an authentication error explains itself");
+            assert!(details.action.is_none(), "{error:?}");
+            let text = serde_json::to_string(&details).unwrap();
+            assert!(
+                !text.contains("login") && !text.contains("password"),
+                "{text}"
+            );
+        }
+    }
 
     /// An engine refusal keeps its meaning and its explanation over REST.
     #[test]

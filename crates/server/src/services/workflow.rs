@@ -21,7 +21,8 @@
 use crate::api::rest::v1::models::workflows::{
     CancelExecutionResponse, ExecuteWorkflowRequest, ExecuteWorkflowResponse, ExecutionProgress,
     ExecutionResultResponse, ExecutionStatistics, ExecutionStatus, ExecutionStatusResponse,
-    ExecutionSummary, ListExecutionsResponse, LogEntry, LogLevel,
+    ExecutionSummary, ListExecutionsResponse, LogEntry, LogLevel, ResetExecutionRequest,
+    ResetExecutionResponse,
 };
 use crate::error::{Result, ServerError};
 use crate::grpc::clients::workflow::WorkflowServiceClient;
@@ -314,6 +315,63 @@ impl WorkflowService {
         let execution = self.owned_execution(execution_id).await?;
 
         Ok(Self::entity_to_result_response(&execution))
+    }
+
+    /// Reset a workflow execution to a journal entry
+    ///
+    /// The engine keeps the journal up to and including the entry and runs
+    /// the workflow again from there, as a new execution. Its answer keeps its
+    /// meaning: a bad entry is 400, an unknown execution 404, a run that may
+    /// not be reset now 409.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the execution is not found or not the caller's, if
+    /// there is no engine to reset it, or if the engine refuses.
+    pub async fn reset_execution(
+        &self,
+        execution_id: &str,
+        request: ResetExecutionRequest,
+    ) -> Result<ResetExecutionResponse> {
+        info!(
+            execution_id = %execution_id,
+            target_event_id = request.target_event_id,
+            "Resetting execution"
+        );
+
+        let execution = self.owned_execution(execution_id).await?;
+        let client = self.workflow_client.as_ref().ok_or_else(|| {
+            ServerError::ServiceUnavailable(
+                "Resetting needs the engine, and this server has no connection to it".to_string(),
+            )
+        })?;
+        let reason = request
+            .reason
+            .filter(|r| !r.trim().is_empty())
+            .unwrap_or_else(|| "Reset through the REST API".to_string());
+
+        let reset = client
+            .reset_workflow(
+                &execution.execution_id,
+                &execution.namespace,
+                request.target_event_id,
+                reason,
+            )
+            .await
+            .map_err(|status| {
+                if !matches!(
+                    status.code(),
+                    tonic::Code::InvalidArgument | tonic::Code::NotFound | tonic::Code::FailedPrecondition
+                ) {
+                    error!(execution_id = %execution_id, error = %status, "The engine did not reset the execution");
+                }
+                reset_error(&status)
+            })?;
+
+        Ok(ResetExecutionResponse {
+            execution_id: reset.old_execution_id,
+            new_execution_id: reset.new_execution_id,
+        })
     }
 
     /// Cancel a workflow execution
@@ -832,6 +890,8 @@ impl WorkflowService {
             execution_id: entity.execution_id.clone(),
             workflow_name: entity.workflow_name.clone(),
             workflow_version: entity.workflow_version.clone(),
+            namespace: entity.namespace.clone(),
+            task_queue: entity.task_queue.clone(),
             status: Self::parse_status(&entity.status),
             submitted_at: entity.submitted_at,
             started_at: entity.started_at,
@@ -994,8 +1054,36 @@ impl Default for WorkflowService {
     }
 }
 
+/// The REST error for an engine that refused a reset: what the caller sent is
+/// wrong (400), names nothing (404), or may not be reset now (409); anything
+/// else is the server's (500).
+fn reset_error(status: &tonic::Status) -> ServerError {
+    let message = status.message().to_string();
+    match status.code() {
+        tonic::Code::InvalidArgument => ServerError::BadRequest(message),
+        tonic::Code::NotFound => ServerError::NotFound(message),
+        tonic::Code::FailedPrecondition => ServerError::Conflict(message),
+        _ => ServerError::internal(format!("Failed to reset execution: {message}")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_refused_reset_keeps_its_meaning() {
+        use axum::http::StatusCode;
+        for (code, want) in [
+            (tonic::Code::InvalidArgument, StatusCode::BAD_REQUEST),
+            (tonic::Code::NotFound, StatusCode::NOT_FOUND),
+            (tonic::Code::FailedPrecondition, StatusCode::CONFLICT),
+            (tonic::Code::Internal, StatusCode::INTERNAL_SERVER_ERROR),
+            (tonic::Code::Unavailable, StatusCode::INTERNAL_SERVER_ERROR),
+        ] {
+            let error = reset_error(&tonic::Status::new(code, "why"));
+            assert_eq!(error.status_code(), want, "{code:?}");
+        }
+    }
+
     use super::*;
 
     #[test]
