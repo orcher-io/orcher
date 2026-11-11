@@ -1,0 +1,13 @@
+-- V086: hold a resumed run briefly for the worker process that keeps its journal
+--
+-- A worker process keeps each run's journal between activations, and an
+-- activation going back to it carries only the entries it does not hold.
+-- When a run is released to resume, claimed_by_instance still names the
+-- process that held its last activation. Until preferred_until, only that
+-- process may claim it; after, anyone may. NULL: no preference, as for every
+-- row before this column.
+--
+-- A preference, never a requirement: it lapses on its own, and a claim
+-- clears it, so a process that is gone, busy or shut down delays its runs
+-- by at most the window and loses nothing.
+ALTER TABLE workflow_executions ADD COLUMN IF NOT EXISTS preferred_until TIMESTAMPTZ;

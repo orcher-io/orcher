@@ -1,0 +1,123 @@
+name: release-please
+
+# Versioning, decided by the commits rather than by whoever remembers.
+#
+# Every push to main is read as Conventional Commits. release-please keeps an
+# open pull request holding the next version and the changelog entries earned
+# so far; merging it bumps the version, writes CHANGELOG.md and tags the
+# release. That merge is the only manual step, and it is a review of exactly
+# what is being cut.
+#
+# It stops at the tag. Binaries are still cut by hand through release.yml,
+# which takes an existing tag and is deliberately manual to keep the Actions
+# bill down — three build jobs, two of them macOS, is not something to spend on
+# every merge. Point that workflow at the tag this one creates when a build is
+# actually wanted.
+#
+# One version for the whole engine: it lives in [workspace.package] and every
+# crate inherits it, so a release moves the engine as one thing rather than
+# letting a crate drift to a number that means nothing. That is also why the
+# release is driven by the `simple` strategy rather than the Rust one: the Rust
+# updater insists on rewriting a literal version in each member manifest, which
+# is precisely what inheritance exists to avoid.
+#
+# Pre-1.0 rules, set in release-please-config.json: `feat` and `fix` bump the
+# patch, so releases step 0.5.0, 0.5.1, 0.5.2; only a breaking change bumps
+# the minor, rather than jumping to 1.0.0. Take `bump-minor-pre-major` off
+# when the API is worth promising otherwise.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  # release-please's own: it opens the release pull request, then tags and
+  # creates the release when that pull request merges. The lockfile job below
+  # pushes to that same pull request, which is the other half of `contents`.
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-22.04
+    outputs:
+      pr_branch: ${{ fromJSON(steps.release.outputs.pr || '{}').headBranchName }}
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # Carry the new version into Cargo.lock.
+  #
+  # CI builds with --locked, so a release that bumps the workspace and leaves
+  # the lockfile on the old version breaks the next build on main. release-please
+  # cannot do it: its updaters address files by path, and a lockfile entry is
+  # found by crate name, which its path syntax cannot express. So the release
+  # pull request gets one more commit before anyone merges it.
+  lockfile:
+    needs: release-please
+    if: needs.release-please.outputs.pr_branch != ''
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.pr_branch }}
+
+      - name: Put the released version on every workspace member
+        run: python3 .github/scripts/sync_lockfile_version.py
+
+      - name: Commit the lockfile if it moved
+        run: |
+          if git diff --quiet Cargo.lock; then
+            echo "Cargo.lock already matches the release."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Cargo.lock
+          git commit -m 'chore: sync Cargo.lock with the released version'
+          git push
+
+      # Prove the release resolves before anyone merges it.
+      #
+      # GitHub does not start workflows for a pull request opened with the
+      # default token, so release pull requests get no CI of their own — the
+      # first build of a bumped workspace would otherwise be the one on main,
+      # after the merge. That is how a stale `version = "0.1.0"` requirement on
+      # a sibling crate went unnoticed until it failed to resolve.
+      #
+      # `cargo metadata` resolves the whole graph against the lockfile without
+      # compiling anything, so this costs seconds rather than a build.
+      - name: Check that the bumped workspace still resolves
+        env:
+          SQLX_OFFLINE: 'true'
+        run: cargo metadata --locked --format-version 1 > /dev/null
+
+  # Publish the engine's developer image for the release just tagged.
+  #
+  # Called rather than triggered: the tag above is pushed with the default
+  # token, and GitHub starts no workflow for that, so engine-image.yml would
+  # never see it. Gated on the repository variable PUBLISH_ENGINE_IMAGE so that
+  # releases publish only once publishing has been switched on; until then, or
+  # for an older tag, run engine-image.yml by hand with the tag.
+  engine-image:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true' && vars.PUBLISH_ENGINE_IMAGE == 'true'
+    # Everything engine-image.yml's job asks for: a called workflow gets no
+    # permission its caller does not grant, and asking for one fails the
+    # whole run before it starts.
+    permissions:
+      contents: read
+      packages: write
+      attestations: read
+    uses: ./.github/workflows/engine-image.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}

@@ -1,0 +1,246 @@
+# ORCHER Orchestrator Service Configuration
+# Example configuration file with queue-based dispatch
+
+[server]
+# gRPC server bind address
+grpc_addr = "127.0.0.1:50051"
+# HTTP server bind address (for health checks and metrics)
+http_addr = "127.0.0.1:8080"
+# Maximum concurrent gRPC streams
+max_concurrent_streams = 1000
+
+[orchestrator]
+# Maximum number of workers
+max_workers = 100
+# Maximum concurrent tasks
+max_concurrent_tasks = 1000
+# Worker heartbeat timeout in seconds
+heartbeat_timeout_secs = 90
+
+[storage]
+# PostgreSQL database URL
+database_url = "postgresql://postgres:postgres@localhost:5432/orcher"
+
+[logging]
+# Log level: trace, debug, info, warn, error
+level = "info"
+# Log format: json, compact, pretty
+format = "json"
+
+[health]
+# Enable readiness checks
+readiness_enabled = true
+# Enable liveness checks
+liveness_enabled = true
+
+# Service Execution Polling Configuration
+# These settings control how SDK Services poll for and execute workflow/task work
+[polling]
+# How long a Service can hold a claim before it expires (seconds)
+# If a Service crashes while processing, the claim will be reclaimed after this timeout.
+# Default: 300 (5 minutes)
+claim_timeout_secs = 300
+
+# How long to wait for the claim query to execute (milliseconds)
+# Raised from 200ms so the claim query survives PostgreSQL latency under load
+# Default: 2000 (2 seconds)
+claim_query_timeout_ms = 2000
+
+# How long to wait when polling for work (seconds)
+# This is the long-poll timeout. Services will wait up to this duration
+# for work to become available before returning empty.
+# Default: 60 (1 minute)
+poll_timeout_secs = 60
+
+# How often to check for and reclaim expired claims (seconds)
+# The reclaimer runs in the background to find executions with expired claims
+# and make them available for other Services.
+# Default: 10 (10 seconds)
+reclaim_interval_secs = 10
+
+# Enable notification-based wake-ups for efficient polling
+# When enabled, Services are notified immediately when work becomes available,
+# reducing latency from poll_timeout_secs to <100ms (600x improvement).
+# Disable for testing or if you suspect notification issues.
+# Default: true
+enable_notifications = true
+
+# Task Timeout Watcher Configuration
+# Automatically detects and handles task timeouts (schedule-to-start, start-to-close, heartbeat)
+[timeout_watcher]
+# Enable the timeout watcher background service
+# Highly recommended for production deployments to handle service crashes and task timeouts
+# Default: true
+enabled = true
+
+# How often to check for timeouts (seconds)
+# Lower values = faster detection, higher database load
+# Recommended: 30 seconds for production, 10 seconds for low-latency requirements
+# Default: 30
+poll_interval_secs = 30
+
+# Maximum number of tasks to process per poll iteration
+# Higher values = more efficient batch processing but longer query times
+# Default: 100
+batch_size = 100
+
+# Enable schedule-to-start timeout detection
+# Detects tasks that are scheduled but never picked up by any service
+# Default: true
+enable_schedule_to_start = true
+
+# Enable start-to-close timeout detection
+# Detects tasks that are started but never completed (service crashed mid-execution)
+# Default: true
+enable_start_to_close = true
+
+# Enable heartbeat timeout detection
+# Detects long-running tasks that stopped sending heartbeats (service hung/deadlocked)
+# Default: true
+enable_heartbeat = true
+
+# Grace period before marking a task as timed out (seconds)
+# Prevents false positives due to clock skew or brief network issues
+# Default: 5
+grace_period_secs = 5
+
+# Queue Configuration (Optional)
+# Uncomment and configure to enable queue-based task dispatch
+# This allows workers to consume tasks from message queues instead of direct dispatch
+
+# [queue]
+# # Enable queue-based dispatch
+# enabled = true
+#
+# # Dispatch strategy: "direct", "queue", or "hybrid"
+# # - direct: Tasks dispatched directly to workers (default, no queue)
+# # - queue: All tasks go through message queue
+# # - hybrid: Dynamic routing based on task characteristics
+# dispatch_strategy = "queue"
+#
+# # Queue provider configuration
+# # Option 1: In-Memory (for development/testing)
+# [queue.provider]
+# type = "inmemory"
+
+# # Option 2: Redis Streams
+# [queue.provider]
+# type = "redis"
+# url = "redis://localhost:6379"
+# pool_size = 10
+# consumer_group = "orchestrator"
+# # Optional: unique consumer ID (auto-generated if not set)
+# # consumer_id = "orchestrator-1"
+
+# # Option 3: RabbitMQ
+# [queue.provider]
+# type = "rabbitmq"
+# url = "amqp://guest:guest@localhost:5672"
+# exchange = "orcher"
+# vhost = "/"
+
+# # Option 4: PostgreSQL-based queue
+# [queue.provider]
+# type = "postgres"
+# url = "postgresql://postgres:postgres@localhost:5432/orcher"
+# pool_size = 10
+# table_name = "task_queue"
+
+# # Option 5: AWS SQS
+# [queue.provider]
+# type = "sqs"
+# region = "us-east-1"
+# # Optional: custom endpoint for LocalStack
+# # endpoint = "http://localhost:4566"
+# # Optional: queue name prefix
+# # queue_prefix = "orcher-"
+
+# # Option 6: Apache Kafka
+# [queue.provider]
+# type = "kafka"
+# brokers = ["localhost:9092"]
+# group_id = "orchestrator-group"
+# # Optional: SASL configuration
+# # [queue.provider.sasl_config]
+# # mechanism = "plain"
+# # username = "user"
+# # password = "pass"
+
+# Workflow Retry Configuration
+# Automatically schedules retries for failed workflows
+[workflow_retry]
+# Enable automatic workflow retry scheduling
+enabled = true
+# How often to poll for failed workflows (seconds)
+poll_interval_secs = 30
+# Maximum number of workflows to process per poll
+batch_size = 50
+# Enable real-time notifications for immediate retry scheduling
+enable_realtime_notifications = true
+# Default maximum retry attempts for workflows
+default_max_attempts = 3
+# Default initial backoff duration (seconds)
+default_initial_backoff_secs = 1
+# Default backoff multiplier for exponential backoff
+default_backoff_multiplier = 2.0
+# Default maximum backoff duration (seconds)
+default_max_backoff_secs = 300
+
+# Child Reconciler Configuration
+# Reports every child workflow's ending to its parent (cancellations, timeouts
+# and terminations included) and applies parent close policies
+[child_reconciler]
+# Enable the sweep
+enabled = true
+# Seconds between passes
+poll_interval_secs = 5
+# Open children examined per pass
+batch_size = 500
+
+# Releasing what a dead worker process held
+# Every engine records, each refresh_interval_secs, the worker processes it has
+# seen polling (by the worker_instance_id their polls carry). A process nobody has
+# seen for missed_refreshes of those intervals is taken for dead: the activations
+# it was handed and never answered go to other workers at once, instead of after
+# claim_timeout_secs, and the task attempts it was running are timed out and
+# retried once their own heartbeats have stopped too. A process that was only
+# slow has its late completion acknowledged without being applied; the next
+# activation replays the same work. Polls that name no process (SDKs older than
+# worker_instance_id) are never judged, and their claims wait for the timeouts.
+# Set the same interval and count on every engine of a deployment.
+# Overridden by ORCHER_WORKER_LIVENESS_ENABLED, ORCHER_WORKER_LIVENESS_REFRESH_SECS
+# and ORCHER_WORKER_LIVENESS_MISSED_REFRESHES.
+[worker_liveness]
+# false: this engine releases nothing (it still records the processes it sees,
+# so engines that do release never take its workers for dead).
+# Default: true
+enabled = true
+
+# Seconds between each engine's records of the processes it sees, and between
+# its sweeps for lapsed ones.
+# Default: 5
+refresh_interval_secs = 5
+
+# Refresh intervals a process may go unseen before what it holds is released:
+# 3 x 5s = 15s. At least 2; the product must be below claim_timeout_secs.
+# Default: 3
+missed_refreshes = 3
+
+# Background Jobs Configuration
+[background_jobs]
+# Enable metrics aggregation job
+metrics_enabled = true
+# Interval between metrics aggregation runs (seconds)
+metrics_interval_secs = 3600
+# Enable data retention job
+retention_enabled = true
+# Interval between retention runs (seconds)
+retention_interval_secs = 86400
+
+# Data retention periods (in days)
+[background_jobs.retention_days]
+workflow_executions = 90
+execution_logs = 30
+journal_entries = 90
+task_executions = 90
+outbox_queue = 7

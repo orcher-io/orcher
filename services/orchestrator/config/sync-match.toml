@@ -1,0 +1,103 @@
+# ORCHER Orchestrator Service Configuration
+# Sync-match: work handed straight to a worker already waiting on its queue
+#
+# Expected performance:
+# - P99 dispatch latency < 1ms (sync-matched tasks)
+# - Better cache locality via worker affinity
+#
+# Prerequisites:
+# - PostgreSQL database (nothing else)
+
+[server]
+grpc_addr = "127.0.0.1:50051"
+http_addr = "127.0.0.1:8001"
+max_concurrent_streams = 1000
+
+[orchestrator]
+max_workers = 100
+max_concurrent_tasks = 1000
+heartbeat_timeout_secs = 90
+
+[storage]
+database_url = "postgresql://localhost:5432/orcher"
+
+[logging]
+level = "info"
+format = "json"
+
+[health]
+readiness_enabled = true
+liveness_enabled = true
+
+# Service Execution Polling Configuration
+# Tuned for sync-match
+[polling]
+# Claim timeout: 5 minutes (how long a service can hold a claim)
+claim_timeout_secs = 300
+
+# Claim query timeout: 2 seconds (how long to wait for claim query execution)
+# Raised from 200ms so the claim query survives PostgreSQL latency under load
+claim_query_timeout_ms = 2000
+
+# Poll timeout: 1 minute (for long-polling)
+poll_timeout_secs = 60
+
+# Reclaim interval: 10 seconds
+reclaim_interval_secs = 10
+
+# Enable notifications for immediate wake-ups
+enable_notifications = true
+
+# ============================================================================
+# Sync-match configuration
+# ============================================================================
+# Enable sync-match for sub-millisecond dispatch latency
+use_sync_match = true
+
+# Maximum waiters per queue (~2MB per queue at 10,000 waiters)
+max_waiters_per_queue = 10000
+
+# Worker affinity for cache locality
+affinity_enabled = true
+
+# Affinity lease durations
+affinity_lease_secs = 30         # Default lease (30 seconds)
+affinity_max_lease_secs = 300    # Max lease (5 minutes)
+
+# Cleanup interval for expired waiters/leases
+routing_cleanup_interval_secs = 30
+
+# Task Timeout Watcher Configuration
+[timeout_watcher]
+enabled = true
+poll_interval_secs = 30
+batch_size = 100
+enable_schedule_to_start = true
+enable_start_to_close = true
+enable_heartbeat = true
+grace_period_secs = 5
+
+# Workflow Retry Configuration
+[workflow_retry]
+enabled = true
+poll_interval_secs = 30
+batch_size = 100
+enable_realtime_notifications = true
+default_max_attempts = 3
+default_initial_backoff_secs = 1
+default_backoff_multiplier = 2.0
+default_max_backoff_secs = 300
+
+# Background Jobs Configuration
+[background_jobs]
+metrics_enabled = true
+metrics_interval_secs = 60
+retention_enabled = true
+retention_interval_secs = 3600
+
+[background_jobs.retention_days]
+workflow_executions = 30
+execution_logs = 7
+journal_entries = 30
+task_executions = 14
+outbox_queue = 1

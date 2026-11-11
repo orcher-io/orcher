@@ -1,0 +1,82 @@
+[package]
+name = "orcher-monitoring"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+documentation.workspace = true
+description = "Observability and monitoring framework for ORCHER task orchestration platform"
+keywords = ["monitoring", "observability", "metrics", "tracing", "health"]
+categories = ["development-tools", "web-programming", "asynchronous"]
+readme = "README.md"
+
+[features]
+default = ["prometheus", "tracing-export", "health-checks"]
+
+# Core monitoring features
+prometheus = ["dep:metrics-prometheus", "dep:prometheus"]
+tracing-export = ["dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry-jaeger"]
+health-checks = []
+
+# Optional features
+system-metrics = ["dep:sysinfo"]
+test-utils = []
+# Gates integration-only config/validation code (used by integration tests).
+integration = []
+
+# Feature combinations
+full = ["prometheus", "tracing-export", "health-checks", "system-metrics"]
+
+[dependencies]
+# ORCHER crates
+orcher-common = { workspace = true }
+orcher-config = { workspace = true, optional = true }
+orcher-storage = { workspace = true, optional = true }
+
+# Async runtime
+tokio = { workspace = true }
+futures = { workspace = true }
+async-trait = { workspace = true }
+
+# Metrics (industry standard)
+metrics = "0.24"
+metrics-prometheus = { version = "0.8", optional = true }
+prometheus = { version = "0.13", optional = true }
+
+# Tracing (industry standard)
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
+tracing-opentelemetry = { version = "0.22", optional = true }
+opentelemetry = { version = "0.21", features = ["trace"], optional = true }
+opentelemetry-jaeger = { version = "0.20", optional = true }
+opentelemetry-otlp = { version = "0.14", optional = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Configuration and validation
+url = { workspace = true }
+parking_lot = "0.12"
+
+# HTTP utilities for tracing context propagation
+http = "0.2"
+
+# System metrics (optional)
+sysinfo = { version = "0.29", optional = true }
+hostname = "0.3"
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+mockall = { workspace = true }
+criterion = { workspace = true }
+
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

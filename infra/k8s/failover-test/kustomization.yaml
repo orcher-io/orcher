@@ -1,0 +1,55 @@
+# Test overlay: deploys the REAL production bundle (../deploy) and adds only what
+# a local test cluster needs. The orchestrator Deployment, migration Job, Service,
+# RBAC, HPA and PDB all come from the base — so this gate validates what we ship
+# instead of a parallel copy that can drift.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: orcher
+
+resources:
+  - manifests/00-namespace.yaml
+  - ../deploy                      # the production bundle, unmodified
+  - manifests/10-postgres.yaml     # test-only: in-cluster Postgres
+# manifests/40-stress-job.yaml is applied per-scenario by failover-test.sh (it
+# patches the workflow count), so it is deliberately not a resource here.
+
+# Locally built images (no registry).
+images:
+  - name: orcher/orchestrator
+    newTag: local
+
+# The base reads DATABASE_URL from this Secret; point it at the in-cluster
+# service. No env patching needed — same wiring as production.
+secretGenerator:
+  - name: orcher-secrets
+    literals:
+      - database-url=postgresql://orcher:orcher@postgres:5432/orcher
+generatorOptions:
+  disableNameSuffixHash: true
+
+patches:
+  # Right-size for a laptop VM (production requests would not co-schedule with
+  # Postgres on a small kind/k3d node).
+  - target:
+      kind: Deployment
+      name: orchestrator
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "100m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "192Mi"
+  # Pin the replica count: k3s ships metrics-server, so the base HPA would
+  # otherwise scale pods mid-test and muddy the assertion.
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: orchestrator
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 3

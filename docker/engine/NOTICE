@@ -1,0 +1,17 @@
+ORCHER engine developer image (ghcr.io/orcher-io/orcher)
+
+The orchestrator and orcher-migrate in this image are licensed under the
+Apache License 2.0 in /LICENSE (source: https://github.com/orcher-io/orcher).
+
+The image also contains open-source components that remain under their own
+licenses, which /LICENSE does not limit:
+
+  - the Rust crates and the Rust standard library compiled into orchestrator
+    and orcher-migrate: listed, with their full license texts and where to
+    get their source, in /THIRD_PARTY_NOTICES;
+  - the ORCHER dashboard in /usr/share/orcher/ui, licensed under the Apache
+    License 2.0 in /usr/share/orcher/ui/LICENSE (source:
+    https://github.com/orcher-io/ui), and the packages bundled into it,
+    listed with their license texts in /usr/share/orcher/ui/THIRD_PARTY_NOTICES;
+  - the packages of the Debian base image: each one's license is in
+    /usr/share/doc/<package>/copyright.

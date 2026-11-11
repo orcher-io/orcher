@@ -1,0 +1,41 @@
+name: pre-commit
+
+# Server-side enforcement of the pre-commit hooks (local hooks are bypassable).
+# Runs the hooks against the files changed in the PR only — so it enforces
+# hygiene/formatting/secret-scanning on new changes without requiring the whole
+# tree to be clean.
+
+# Manual-only (Actions budget) — pre-commit runs locally on every commit via
+# `pre-commit install`, so the CI mirror is opt-in.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: pre-commit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Rust (rustfmt)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run hooks on changed files
+        run: |
+          pre-commit run \
+            --from-ref "origin/${{ github.base_ref }}" --to-ref HEAD \
+            --show-diff-on-failure --color=always

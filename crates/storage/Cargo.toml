@@ -1,0 +1,143 @@
+[package]
+name = "orcher-storage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+documentation.workspace = true
+description = "Data persistence and caching layer for ORCHER task orchestration platform"
+keywords = ["storage", "database", "postgres", "redis", "repository"]
+categories = ["database", "caching", "asynchronous"]
+
+[[bin]]
+name = "orcher-migrate"
+path = "src/bin/orcher-migrate.rs"
+required-features = ["postgres", "migrations"]
+
+[features]
+default = ["postgres", "migrations", "compression"]
+compression = ["dep:flate2"]
+postgres = ["dep:sqlx", "dep:deadpool-postgres", "orcher-common/postgres"]
+redis = ["dep:redis", "dep:deadpool-redis"]
+migrations = ["sqlx/migrate"]
+backup = ["dep:flate2"]
+test-utils = ["dep:testcontainers", "dep:fake"]
+# S3 storage backend (not yet implemented)
+s3 = []
+
+[dependencies]
+# Core ORCHER crates
+orcher-common = { workspace = true, features = ["test-utils"] }
+orcher-config = { workspace = true }
+
+# Core async runtime
+tokio = { workspace = true }
+futures = { workspace = true }
+async-trait = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+rmp-serde = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Time and identifiers
+chrono = { workspace = true }
+jiff = { workspace = true }
+uuid = { workspace = true }
+cron = { workspace = true }
+
+# Cryptography for checksums
+sha2 = { workspace = true }
+
+
+# CLI (for migration tool binary)
+clap = { version = "4.5", features = ["derive", "env"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Database - PostgreSQL
+sqlx = { workspace = true, optional = true, features = ["chrono"] }
+deadpool-postgres = { workspace = true, optional = true }
+
+# Caching - Redis
+redis = { workspace = true, optional = true, features = ["tokio-comp", "streams", "cluster", "connection-manager"] }
+deadpool-redis = { workspace = true, optional = true }
+
+# Connection pooling utilities
+deadpool = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Utilities
+url = { workspace = true }
+hex = { workspace = true }
+urlencoding = "2.1"
+rand = { workspace = true }
+
+
+
+# Test utilities (optional)
+testcontainers = { workspace = true, optional = true }
+fake = { workspace = true, optional = true }
+
+# Filesystem utilities
+dirs = "5.0"
+shellexpand = "3.1"
+walkdir = "2.5"
+
+# Compression (also used for WASM storage and backup)
+flate2 = { workspace = true, optional = true }
+
+# Lock-free data structures for caching (cross-platform)
+dashmap = { workspace = true }
+
+# Unix system calls (for filesystem stats)
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.27", features = ["fs"] }
+
+# Windows system calls (for filesystem stats)
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["fileapi"] }
+
+# Additional utilities
+log = "0.4"
+
+# Metrics and monitoring
+tokio-metrics = { workspace = true }
+
+# Lock-free data structures for caching
+dashmap = { workspace = true }
+
+# Stream processing
+tokio-stream = { workspace = true }
+tokio-util = { workspace = true }
+
+# Validation
+validator = { workspace = true }
+
+[dev-dependencies]
+orcher-common = { workspace = true, features = ["test-utils"] }
+tokio-test = { workspace = true }
+tempfile = { workspace = true }
+criterion = { workspace = true }
+serial_test = { workspace = true }
+testcontainers = { workspace = true }
+fake = { workspace = true }
+proptest = { workspace = true }
+
+# For integration tests
+tokio = { workspace = true, features = ["full", "test-util"] }
+
+
+
+
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

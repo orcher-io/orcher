@@ -1,0 +1,37 @@
+{
+  "name": "@orcher/example-durable-execution",
+  "version": "1.0.0",
+  "description": "ORCHER SDK Durable Execution Example with Dependency Injection",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "start:explicit": "node dist/main-explicit.js",
+    "dev": "ts-node src/main.ts",
+    "dev:explicit": "ts-node src/main-explicit.ts",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "orcher",
+    "workflow",
+    "durable-execution",
+    "dependency-injection",
+    "example"
+  ],
+  "author": "ORCHER Team",
+  "license": "MIT",
+  "dependencies": {
+    "@orcher/sdk": "file:../../../../sdk-ts/packages/sdk",
+    "reflect-metadata": "^0.1.13",
+    "tslib": "^2.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,37 @@
+# In-cluster load + worker + exactly-once ledger.
+# __COUNT__/__DEADLINE__ are substituted by failover-test.sh (this file is applied
+# by the script, not by kustomize)., pointed at the orchestrator
+# ClusterIP Service (no NodePort / host hop). This is the correct topology for
+# orcher's pull-based long-poll dispatch. COUNT/DEADLINE are patched by the test
+# script via `kubectl set env` / env substitution.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: stress
+  namespace: orcher
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels: { app: stress }
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: stress
+          image: orcher/stress:local
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--count"
+            - "__COUNT__"
+            - "--namespace"
+            - "default"
+            - "--task-queue"
+            - "dispatch-stress"
+            - "--server-url"
+            - "http://orchestrator:50051"
+            - "--deadline-secs"
+            - "__DEADLINE__"
+            - "--workflow-pollers"
+            - "8"
+            - "--task-pollers"
+            - "8"

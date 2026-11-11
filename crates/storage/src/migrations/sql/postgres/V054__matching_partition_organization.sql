@@ -1,0 +1,17 @@
+-- V054: record which organization a task in a matching partition belongs to
+--
+-- A partition is keyed by (namespace, task_queue), and a namespace name is
+-- unique only within an organization. A claim by names alone handed one
+-- organization's worker another's task in a namespace of the same name, a task
+-- whose completion is then refused to that worker, so it ran and never
+-- finished. A claim now takes only its own organization's tasks.
+--
+-- Rows written before this carry no organization. A claim takes such a row
+-- to be its workflow's organization's when the workflow is on the same
+-- database, and V055 stamps them from it; one whose workflow lives on another
+-- shard database cannot be resolved here, is not claimed by a worker acting
+-- for an organization, and is delivered only to a worker acting for none. The
+-- table holds only tasks waiting to be delivered, and the matching layer is
+-- opt-in, so it is empty or nearly so wherever this runs; drain it before
+-- upgrading if it is not.
+ALTER TABLE matching_partitions ADD COLUMN IF NOT EXISTS organization_id UUID;

@@ -1,0 +1,54 @@
+# Schema migrations. The orchestrator does NOT self-migrate in production (it
+# fails fast on a pending schema), so this must succeed before the pods start —
+# on a fresh database they would otherwise crash on boot.
+#
+# Uses the same image, which ships the `orcher-migrate` binary. The Job
+# self-deletes after completion (ttlSecondsAfterFinished) so a later upgrade can
+# re-apply it without hitting the Job's immutable fields.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: orcher-migrate
+  namespace: orcher
+  labels:
+    app: orcher-migrate
+    component: migration
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: orcher-migrate
+        component: migration
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: migrate
+          image: orcher/orchestrator:latest
+          imagePullPolicy: IfNotPresent
+          command: ["orcher-migrate", "run"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: orcher-secrets
+                  key: database-url
+            # Migrated in addition to the primary DB when partitioned
+            # persistence is in use.
+            - name: ORCHER_SHARD_DATABASE_URLS
+              valueFrom:
+                secretKeyRef:
+                  name: orcher-secrets
+                  key: shard-database-urls
+                  optional: true
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

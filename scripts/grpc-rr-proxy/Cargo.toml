@@ -1,0 +1,17 @@
+[package]
+name = "grpc-rr-proxy"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Test-only gRPC relay that spreads every request round robin over several engines"
+
+# A test tool for scripts/cluster-multinode-e2e.sh, not part of the engine:
+# excluded from the workspace, built on demand by that script.
+[workspace]
+
+[dependencies]
+bytes = "1"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["client", "server", "http2"] }
+hyper-util = { version = "0.1", features = ["client-legacy", "http2", "tokio"] }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "time"] }

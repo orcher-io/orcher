@@ -1,0 +1,91 @@
+# Development Configuration for ORCHER Orchestrator Service
+#
+# This configuration is suitable for local development and testing.
+# DO NOT use in production environments.
+
+[server]
+# gRPC server configuration
+# This machine only. To serve other machines, listen on 0.0.0.0 and set
+# [security] auth_mode (or pass --insecure to run open on purpose).
+grpc_addr = "127.0.0.1:50051"
+http_addr = "127.0.0.1:8080"
+max_concurrent_streams = 100
+
+[orchestrator]
+# Core orchestrator configuration
+max_workers = 10
+max_concurrent_tasks = 50
+heartbeat_timeout_secs = 60
+
+[storage]
+# Storage configuration
+# For development, use a local PostgreSQL
+database_url = "postgresql://localhost:5432/orcher_dev"
+
+[logging]
+# Logging configuration
+# Use 'debug' for verbose output, 'text' for human-readable format
+level = "debug"
+format = "text"
+
+[health]
+# Health check configuration
+readiness_enabled = true
+liveness_enabled = true
+
+[polling]
+# Service execution polling configuration
+claim_timeout_secs = 300
+# Claim query timeout: 2 seconds (how long to wait for claim query execution)
+# Raised from 200ms so the claim query survives PostgreSQL latency under load
+claim_query_timeout_ms = 2000
+poll_timeout_secs = 60
+reclaim_interval_secs = 10
+enable_notifications = true
+
+[timeout_watcher]
+# Task timeout watcher configuration
+enabled = true
+poll_interval_secs = 30
+batch_size = 100
+enable_schedule_to_start = true
+enable_start_to_close = true
+enable_heartbeat = true
+grace_period_secs = 5
+
+[background_jobs]
+# Background jobs configuration
+# These jobs run periodically for system maintenance
+
+# Metrics aggregation job
+metrics_enabled = true
+metrics_interval_secs = 3600  # Run every hour
+
+# Data retention job
+retention_enabled = true
+retention_interval_secs = 86400  # Run daily (24 hours)
+
+[background_jobs.retention_days]
+# Retention periods for different data types (in days)
+workflow_executions = 90  # Keep 3 months of workflow data
+execution_logs = 30       # Keep 1 month of logs
+journal_entries = 90      # Keep 3 months of journal for audit
+task_executions = 90      # Keep 3 months of task data
+outbox_queue = 7          # Keep 1 week of completed outbox tasks
+
+[workflow_retry]
+# Workflow retry scheduler configuration
+enabled = true
+poll_interval_secs = 30  # Fallback polling interval
+batch_size = 100
+
+# Real-time notifications using PostgreSQL LISTEN/NOTIFY
+# When enabled, the scheduler receives immediate notifications of workflow failures
+# Falls back to polling if notifications fail
+enable_realtime_notifications = true
+
+# Default retry policy
+default_max_attempts = 5
+default_initial_backoff_secs = 2
+default_backoff_multiplier = 2.0
+default_max_backoff_secs = 300

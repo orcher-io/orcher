@@ -1,0 +1,137 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestrator
+  namespace: orcher
+  labels:
+    app: orchestrator
+    component: coordination
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: orchestrator
+  template:
+    metadata:
+      labels:
+        app: orchestrator
+        component: coordination
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: orchestrator
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: orchestrator
+          image: orcher/orchestrator:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            # Where the mounted ConfigMap is. The binary reads a config file
+            # only when told its path; without this it runs on compiled-in
+            # defaults and the ConfigMap below is never opened.
+            - name: ORCHER_ORCHESTRATOR_CONFIG
+              value: /etc/orchestrator/config.toml
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: orcher-secrets
+                  key: database-url
+            # --- clustering / HA ---------------------------------------------
+            # Required for replicas > 1 to act as ONE cluster. Without this each
+            # replica runs standalone (no shard ownership, no generation fencing).
+            - name: ORCHER_CLUSTER_ENABLED
+              value: "true"
+            # Stable per-pod identity. The default is the bind address, which is
+            # identical on every pod — members would collide. Use the pod name.
+            - name: ORCHER_NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            # Where the other pods reach this one, to relay a workflow
+            # completion to the pod that owns the workflow. The bind address
+            # (0.0.0.0) is not dialable; without this, forwarding stays off on
+            # this pod and a completion is handled wherever it lands.
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: ORCHER_ADVERTISE_ADDR
+              value: "$(POD_IP):50051"
+            - name: ORCHER_CLUSTER_HEARTBEAT_SECS
+              value: "5"
+            # --- connection pool --------------------------------------------
+            # Per-pod pool cap. Keep (replicas x max) + headroom below the
+            # server's max_connections, or new/restarting pods fail to connect.
+            # See README "Sizing Postgres connections".
+            - name: ORCHER_PG_MAX_CONNECTIONS
+              value: "25"
+            - name: ORCHER_PG_MIN_CONNECTIONS
+              value: "5"
+            - name: LOG_LEVEL
+              value: "info"
+            - name: LOG_FORMAT
+              value: "json"
+            - name: GRPC_BIND_ADDR
+              value: "0.0.0.0:50051"
+            # The API is served without authentication inside the cluster
+            # network. Reachable from anywhere else, set [security] auth_mode
+            # in the ConfigMap instead and remove this.
+            - name: ORCHER_INSECURE
+              value: "true"
+            - name: HTTP_BIND_ADDR
+              value: "0.0.0.0:8080"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: config
+              mountPath: /etc/orchestrator
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: orchestrator-config
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - orchestrator
+                topologyKey: kubernetes.io/hostname

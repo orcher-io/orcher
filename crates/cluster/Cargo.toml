@@ -1,0 +1,32 @@
+[package]
+name = "orcher-cluster"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+documentation.workspace = true
+description = "Cluster membership and shard ownership for ORCHER horizontal scaling"
+keywords = ["orchestration", "cluster", "sharding", "distributed"]
+categories = ["asynchronous", "concurrency"]
+
+# The core (hash, rendezvous ownership, traits, static view) is pure and
+# dependency-free. `async-trait` backs the ClusterStore seam; the DB-backed
+# membership view is only pulled in via the optional `storage` feature, so
+# consumers that just want the ownership math don't drag in sqlx/storage.
+[dependencies]
+async-trait = { workspace = true }
+orcher-storage = { path = "../storage", optional = true }
+# Only for the routing layer (ShardRouter returns &PgPool). Gated behind `storage`.
+sqlx = { workspace = true, optional = true }
+# Only for the storage-layer ShardPoolResolver bridge (keys on the workflow UUID).
+uuid = { workspace = true, optional = true }
+
+[features]
+# Enables the Postgres-backed ClusterStore adapter + the ShardRouter seam
+# (both need real pools). Off by default — pure ownership logic needs nothing.
+storage = ["dep:orcher-storage", "dep:sqlx", "dep:uuid"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

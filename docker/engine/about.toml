@@ -1,0 +1,38 @@
+# cargo-about configuration for the engine image's THIRD_PARTY_NOTICES
+# (docker/engine/third-party-notices.sh).
+#
+# `accepted` is the allow-list for code the image distributes in binary form.
+# A dependency whose license expression cannot be satisfied from it fails the
+# image build, so a GPL, AGPL, SSPL, BUSL or undeclared license never reaches
+# a published binary unnoticed: widening this list is a decision, not a fix.
+# Order is preference: where a crate offers a choice ("MIT OR Apache-2.0"),
+# the first accepted license is the one it is redistributed under and the
+# one whose text the notices reproduce.
+#
+# MPL-2.0 (option-ext) is file-level copyleft: it allows binary distribution
+# provided recipients are told where the source is, which the notices do for
+# every crate (its crates.io page).
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "ISC",
+    "Zlib",
+    "0BSD",
+    "Unicode-3.0",
+    "CDLA-Permissive-2.0",
+    "MPL-2.0",
+]
+
+# The image's two platforms.
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+]
+
+# Build scripts and test-only crates are not in the binaries. Proc-macros
+# still are in cargo-about's graph (and so held to the allow-list); the
+# script drops them from the notices, as nothing of them is linked either.
+ignore-build-dependencies = true
+ignore-dev-dependencies = true

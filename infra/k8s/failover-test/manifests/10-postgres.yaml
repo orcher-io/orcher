@@ -1,0 +1,58 @@
+# Ephemeral Postgres for the failover test (not the pod we kill — no PVC needed).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: orcher
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          # Headroom for 3 orchestrator pods' pools + migrate/psql clients.
+          # fsync/synchronous_commit OFF: this is an ephemeral TEST DB on VM-backed
+          # emptyDir where fsync is slow; orcher's write-heavy path (~29 writes/wf)
+          # is fsync-bound, so without this the load times out. Safe here (no
+          # durability needed); NEVER do this in production.
+          args:
+            - "-c"
+            - "max_connections=200"
+            - "-c"
+            - "fsync=off"
+            - "-c"
+            - "synchronous_commit=off"
+            - "-c"
+            - "full_page_writes=off"
+          env:
+            - { name: POSTGRES_USER, value: orcher }
+            - { name: POSTGRES_PASSWORD, value: orcher }
+            - { name: POSTGRES_DB, value: orcher }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "orcher", "-d", "orcher"] }
+            initialDelaySeconds: 3
+            periodSeconds: 3
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: orcher
+spec:
+  selector: { app: postgres }
+  ports:
+    - port: 5432
+      targetPort: 5432

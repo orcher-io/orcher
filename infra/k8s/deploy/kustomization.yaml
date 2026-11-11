@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: orcher
+
+# `commonLabels` also rewrites selectors (immutable on an existing Deployment),
+# so use `labels` with includeSelectors: false.
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/name: orchestrator
+      app.kubernetes.io/component: coordination
+      app.kubernetes.io/part-of: orcher
+
+resources:
+  - configmap.yaml
+  - migrate-job.yaml
+  - deployment.yaml
+  - service.yaml
+  - rbac.yaml
+  - hpa.yaml
+  - pdb.yaml
+
+images:
+  - name: orcher/orchestrator
+    newTag: latest
+
+replicas:
+  - name: orchestrator
+    count: 3

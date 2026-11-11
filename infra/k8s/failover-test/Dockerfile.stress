@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1
+# In-cluster load/worker image: the orcher-contract `stress` harness.
+# Runs the worker + load driver + exactly-once ledger in one process, pointed at
+# the orchestrator Service from inside the cluster (no NodePort / host hop).
+#
+# Built by failover-test.sh (build context = the sibling sdk-rust repo root).
+FROM rust:1-slim-bookworm AS builder
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        pkg-config libssl-dev protobuf-compiler libprotobuf-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY . .
+
+RUN cargo build --release -p orcher-contract --bin stress
+
+# ---- runtime ----
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates libssl3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m -u 1000 stress
+
+COPY --from=builder /app/target/release/stress /usr/local/bin/stress
+USER stress
+ENTRYPOINT ["stress"]

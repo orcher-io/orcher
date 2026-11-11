@@ -1,0 +1,56 @@
+[package]
+name = "orcher-dispatch"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+documentation.workspace = true
+description = "Execution dispatch system for ORCHER - polling, routing, capacity management"
+keywords = ["orchestration", "dispatch", "polling", "async"]
+categories = ["asynchronous", "concurrency"]
+
+[features]
+default = []
+test-utils = []
+
+[dependencies]
+# Workspace crates
+orcher-common = { path = "../common" }
+orcher-monitoring = { path = "../monitoring" }
+orcher-storage = { path = "../storage" }
+
+# Redis (optional, for shard coordinator)
+
+# Async runtime
+tokio = { workspace = true, features = ["sync", "time", "rt"] }
+async-trait.workspace = true
+futures = { workspace = true }
+
+# Concurrency
+dashmap = { workspace = true }
+parking_lot = { workspace = true }
+crossbeam = "0.8"
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Utilities
+uuid = { workspace = true }
+rand = { workspace = true }
+itertools = "0.13"
+hostname = "0.4"
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+tempfile = { workspace = true }
+sqlx = { workspace = true, features = ["runtime-tokio", "postgres"] }

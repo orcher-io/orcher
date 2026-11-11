@@ -1,0 +1,14 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: orchestrator
+  namespace: orcher
+  labels:
+    app: orchestrator
+    component: coordination
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: orchestrator
+  unhealthyPodEvictionPolicy: AlwaysAllow

@@ -1,0 +1,6 @@
+# The dashboard the image serves on its HTTP port: a release of
+# github.com/orcher-io/ui, pinned by version and by the SHA-256 of its archive.
+# To move to another release, change both lines; the release publishes the
+# hash as orcher-ui-<version>.tar.gz.sha256.
+ORCHER_UI_VERSION=0.2.1
+ORCHER_UI_SHA256=4ee5db284de23eb45e4192e06e94ca76da370ef44e8a7f5af3c71d4bf9231476

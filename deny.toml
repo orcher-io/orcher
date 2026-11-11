@@ -1,0 +1,120 @@
+# cargo-deny configuration for ORCHER project
+# This file defines policies for dependencies, licenses, and security
+# Compatible with cargo-deny 0.18.4+
+
+[graph]
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "x86_64-unknown-linux-musl" },
+    { triple = "x86_64-pc-windows-msvc" },
+    { triple = "x86_64-apple-darwin" },
+    { triple = "aarch64-apple-darwin" },
+]
+all-features = true
+no-default-features = false
+
+[output]
+feature-depth = 1
+
+[advisories]
+version = 2
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+
+# Ignore specific advisories (add RUSTSEC IDs as needed)
+ignore = [
+    # Ignore unmaintained paste crate - indirect dependency from rmp-serde
+    "RUSTSEC-2024-0436",
+    # Ignore unmaintained proc-macro-error - indirect dependency from utoipa
+    "RUSTSEC-2024-0370",
+    # Ignore idna 0.4.0 vulnerability - pinned by validator 0.16.x transitive dep
+    "RUSTSEC-2024-0421",
+    # Ignore unmaintained bincode - no drop-in replacement, v1.3.3 is stable
+    "RUSTSEC-2025-0141",
+    # Ignore unmaintained opentelemetry-jaeger - migrate to OTLP exporter later
+    "RUSTSEC-2025-0123",
+    # Ignore rsa timing sidechannel - no safe upgrade available yet
+    "RUSTSEC-2023-0071",
+    # Ignore unmaintained rustls-pemfile - pinned by tonic 0.12.x
+    "RUSTSEC-2025-0134",
+    # Ignore protobuf recursion crash - pinned to v2 by prometheus 0.13.x
+    "RUSTSEC-2024-0437",
+    # Ignore astral-tokio-tar PAX extension validation - dev-only dep via testcontainers
+    "RUSTSEC-2026-0066",
+]
+
+[licenses]
+version = 2
+
+# List of allowed licenses
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "CC0-1.0",
+    "MPL-2.0",
+    "Zlib",
+    "CDLA-Permissive-2.0",
+    "0BSD",
+]
+
+
+[bans]
+multiple-versions = "allow"
+wildcards = "allow"
+
+# Deny specific crates
+deny = [
+    # Deny deprecated or problematic crates
+    { name = "tempdir", version = "*", reason = "Use tempfile instead" },
+    { name = "rand", version = "<0.8", wrappers = ["http-types"], reason = "Use rand 0.8+ for better security" },
+]
+
+# Skip certain crates from multiple version checks
+skip = [
+    # Allow multiple versions of these common crates
+    { name = "windows-sys", version = "*" },
+    { name = "windows_x86_64_msvc", version = "*" },
+]
+
+# Skip trees rooted at these crates - this allows all transitive dependencies
+skip-tree = [
+    # Skip development dependencies
+    { name = "criterion", version = "*" },
+    { name = "wiremock", version = "*" },
+    # Skip main production dependencies and their trees
+    { name = "tokio", version = "*" },
+    { name = "axum", version = "*" },
+    { name = "sqlx", version = "*" },
+    { name = "serde", version = "*" },
+    { name = "clap", version = "*" },
+    { name = "anyhow", version = "*" },
+    { name = "tracing", version = "*" },
+    { name = "reqwest", version = "*" },
+    { name = "uuid", version = "*" },
+    { name = "chrono", version = "*" },
+    { name = "redis", version = "*" },
+    { name = "jsonwebtoken", version = "*" },
+    { name = "argon2", version = "*" },
+    { name = "ldap3", version = "*" },
+    { name = "oauth2", version = "*" },
+    { name = "tower", version = "*" },
+    { name = "tower-http", version = "*" },
+    { name = "utoipa", version = "*" },
+    { name = "config", version = "*" },
+    { name = "petgraph", version = "*" },
+]
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+[sources.allow-org]
+github = []
+gitlab = []
+bitbucket = []

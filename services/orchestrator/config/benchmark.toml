@@ -1,0 +1,192 @@
+# ORCHER Orchestrator Service Configuration
+# ============================================================================
+# BENCHMARK-OPTIMIZED CONFIGURATION
+# ============================================================================
+#
+# This configuration is specifically tuned for accurate performance benchmarking.
+# It disables aggressive timeouts that cause cascading failures under high load.
+#
+# USAGE:
+#   cargo run --release --bin orchestrator -- --config services/orchestrator/config/benchmark.toml
+#
+# WHY THIS CONFIG?
+# ----------------
+# The default phase7-sync-match.toml has aggressive schedule-to-start timeouts
+# (5 second grace period) that cause cascading failures when:
+#   1. Many workers compete for limited workflows (thundering herd)
+#   2. Claim contention delays task pickup beyond the grace period
+#   3. Timeout watcher marks tasks as timed out before they start
+#   4. Database constraint errors occur (task never started)
+#   5. Workflows fail, skewing benchmark results
+#
+# This config disables schedule-to-start timeouts and extends grace periods
+# to measure TRUE throughput, not "how fast does the timeout watcher kill workflows."
+#
+# SCALING GUIDANCE:
+# -----------------
+# Each SDK worker defaults to 100 concurrent execution slots.
+# With N workers, you have N * 100 concurrent polls competing for work.
+#
+# To avoid contention:
+#   - workflows >= workers * 50  (minimum)
+#   - workflows >= workers * 100 (optimal)
+#
+# Example: 8 workers should test with 400-800+ workflows
+#
+# BENCHMARK SCRIPT:
+# -----------------
+# Use with the auto-scaling benchmark script:
+#   ./scripts/benchmark.sh --workers 1,2,4,8 --auto-scale
+#
+# This automatically scales workflows proportionally with worker count.
+#
+# ============================================================================
+
+[server]
+grpc_addr = "127.0.0.1:50051"
+http_addr = "127.0.0.1:8001"
+# High concurrent streams for benchmark load
+max_concurrent_streams = 2000
+
+[orchestrator]
+# Support up to 100 workers for scaling tests
+max_workers = 100
+# High concurrent task limit for benchmark
+max_concurrent_tasks = 5000
+# Extended heartbeat timeout for benchmark stability
+heartbeat_timeout_secs = 300
+
+[storage]
+database_url = "postgresql://localhost:5432/orcher"
+
+[logging]
+# Use info level to reduce log overhead during benchmarks
+# Set to "debug" for troubleshooting
+level = "info"
+format = "json"
+
+[health]
+readiness_enabled = true
+liveness_enabled = true
+
+# ============================================================================
+# Polling Configuration - Extended for Benchmark Stability
+# ============================================================================
+[polling]
+# Claim timeout: 10 minutes
+# How long a worker can hold a claim before it's considered abandoned.
+# Extended from 5 minutes to handle benchmark load spikes.
+claim_timeout_secs = 600
+
+# Claim query timeout: 5 seconds
+# How long to wait for the PostgreSQL claim query to execute.
+# Extended from 2 seconds to handle high contention scenarios.
+# If you see "Claim query timed out" warnings, increase this.
+claim_query_timeout_ms = 5000
+
+# Batch claim size: 10
+# Claims multiple workflow executions in a single database query.
+# This dramatically reduces contention when multiple workers are polling.
+# - 1: Disabled (legacy single-claim behavior)
+# - 5-10: Good for moderate load
+# - 10-20: Good for high load with many workers
+batch_claim_size = 10
+
+# Poll timeout: 2 minutes
+# Long-poll duration for workers waiting for work.
+# Extended from 1 minute for benchmark stability.
+poll_timeout_secs = 120
+
+# Reclaim interval: 30 seconds
+# How often to check for abandoned claims.
+# Extended from 10 seconds to reduce background overhead.
+reclaim_interval_secs = 30
+
+# Enable in-memory notifications for immediate wake-ups
+enable_notifications = true
+
+# ============================================================================
+# Sync-Match Configuration
+# ============================================================================
+# Sync-match hands work straight to a worker already waiting on its queue,
+# in-process; it needs nothing beyond PostgreSQL.
+use_sync_match = true
+
+# Maximum waiters per queue
+# At 10,000 waiters, this uses ~2MB memory per queue.
+max_waiters_per_queue = 10000
+
+# Worker affinity for cache locality
+affinity_enabled = true
+
+# Affinity lease durations (extended for benchmark)
+affinity_lease_secs = 60         # Default lease: 60 seconds
+affinity_max_lease_secs = 600    # Max lease: 10 minutes
+
+# Cleanup interval for expired waiters/leases
+routing_cleanup_interval_secs = 60
+
+# ============================================================================
+# Task Timeout Watcher - BENCHMARK SAFE SETTINGS
+# ============================================================================
+# CRITICAL: Schedule-to-start timeout is DISABLED for benchmarking.
+#
+# The schedule-to-start timeout measures how long a task waits in queue
+# before a worker picks it up. Under high contention (many workers, few
+# workflows), tasks can wait longer than expected, triggering timeouts
+# that cascade into workflow failures.
+#
+# For production, you may want to re-enable this with longer timeouts:
+#   enable_schedule_to_start = true
+#   grace_period_secs = 60  # or higher
+#
+[timeout_watcher]
+enabled = true
+# Check less frequently to reduce overhead
+poll_interval_secs = 60
+batch_size = 100
+
+# DISABLED: Prevents cascading failures during benchmark
+# This is the key setting that was causing 80%+ failure rates
+enable_schedule_to_start = false
+
+# Keep these enabled - they protect against truly stuck tasks
+enable_start_to_close = true
+enable_heartbeat = true
+
+# Extended grace period: 60 seconds
+# Even for enabled timeouts, give tasks plenty of buffer
+grace_period_secs = 60
+
+# ============================================================================
+# Workflow Retry Configuration
+# ============================================================================
+[workflow_retry]
+enabled = true
+# Less frequent polling during benchmarks
+poll_interval_secs = 60
+batch_size = 100
+enable_realtime_notifications = true
+default_max_attempts = 3
+default_initial_backoff_secs = 1
+default_backoff_multiplier = 2.0
+default_max_backoff_secs = 300
+
+# ============================================================================
+# Background Jobs Configuration
+# ============================================================================
+[background_jobs]
+metrics_enabled = true
+# Less frequent metrics during benchmarks
+metrics_interval_secs = 120
+
+# Disable retention during benchmarks to avoid interference
+retention_enabled = false
+retention_interval_secs = 3600
+
+[background_jobs.retention_days]
+workflow_executions = 30
+execution_logs = 7
+journal_entries = 30
+task_executions = 14
+outbox_queue = 1

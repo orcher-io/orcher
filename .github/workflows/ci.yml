@@ -1,0 +1,160 @@
+name: CI
+
+# Compiles the whole workspace (including test targets) offline.
+#
+# The build is database-free: a committed sqlx offline cache (.sqlx/) lets the
+# compile-time query macros resolve without a live PostgreSQL, so
+# `SQLX_OFFLINE=true` is all that's needed.
+#
+# Needs no secrets: the contract suite checks out orcher-io/sdk-rust, which is
+# public, and the engine workspace and sdk-rust take orcher-proto and
+# orcher-sdk-core from crates.io, so neither git nor cargo needs credentials.
+#
+# Gates: rustfmt, a warning-free compile (`RUSTFLAGS=-D warnings`), and the
+# database-free library unit tests (`cargo test --lib`).
+#
+# Tests run single-threaded (`--test-threads=1`): a handful of unit tests mutate
+# process environment variables and race under the default parallel runner.
+# Follow-up (not gated yet): clippy.
+#
+# This used to be manual-only, to save Actions minutes. What that cost, in one
+# week: a migration merged that the runner never executes (the file existed but
+# was not registered, so the schema silently never changed), and a capacity
+# counter that wrapped and took a worker out for the life of the process. Both
+# were caught by tests already in this repository, by someone running them by
+# hand, after the merge. A pull request that nobody's machine checks is a pull
+# request reviewed on faith.
+#
+# The cost is bounded deliberately: one job, sharing one build between the
+# compile check, the unit tests and the database guards, cached, cancelled
+# when a branch is pushed again, and skipped for a documentation-only change.
+#
+# The commands are in scripts/ci.sh, not here, so the same gate runs anywhere.
+#
+# It runs on GitHub's hosted runners only. A self-hosted runner would run
+# whatever a pull request's code does on the machine that hosts it.
+on:
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+  # Weekly on main whatever was merged: keeps main's build cache, which pull
+  # requests restore from, warm, and catches what changes without a commit
+  # here (the Rust SDK the contract suite checks out, a runner image).
+  schedule:
+    - cron: '17 4 * * 1'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # A push to main whose tree is exactly a pull request head that already
+  # passed CI was tested as it stands: a pull request runs on the merge of its
+  # head into main, which is the head itself when the branch was up to date,
+  # and a squash merge of it is that same tree. Such a push skips the second,
+  # identical run. Any other push, a manual run and the weekly run go ahead.
+  verified:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          skip=false
+          tree=$(gh api "repos/$REPO/git/commits/$SHA" --jq .tree.sha)
+          for pr in $(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[].number'); do
+            # By the pull request's branch: a run lists its pull requests only
+            # while they are open, and this one has just been merged.
+            branch=$(gh api "repos/$REPO/pulls/$pr" --jq .head.ref)
+            heads=$(gh api -X GET "repos/$REPO/actions/workflows/ci.yml/runs" \
+              -f event=pull_request -f status=success -f branch="$branch" -f per_page=100 \
+              --jq '.workflow_runs[].head_sha' | sort -u)
+            for head in $heads; do
+              if [ "$(gh api "repos/$REPO/git/commits/$head" --jq .tree.sha)" = "$tree" ]; then
+                echo "main at $SHA is the tree of #$pr's head $head, which passed CI"
+                skip=true
+                break 2
+              fi
+            done
+          done
+          [ "$skip" = true ] || echo "no passing pull request head has this tree; running CI"
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
+  ci:
+    needs: verified
+    if: ${{ !cancelled() && needs.verified.outputs.skip != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # The contract suite drives real workflows through the Rust SDK, whose
+      # repository it needs beside this one. Checked out before the cache is
+      # restored, so the cache can cover its build too.
+      - name: Checkout the Rust SDK for the contract suite
+        uses: actions/checkout@v4
+        with:
+          repository: orcher-io/sdk-rust
+          path: sdk-rust
+
+      # The runner starts empty, so the build is cached.
+      #
+      # The dependencies of both workspaces: left out, sdk-rust's were compiled
+      # from nothing on every run. Neither workspace's own crates are kept. A
+      # checkout gives every file a new mtime, which is all Cargo judges a
+      # local crate's freshness by, so a cached build of one is always stale;
+      # and setting mtimes back to commit times could pass one off as fresh.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            sdk-rust -> target
+
+      - name: Format, compile, unit tests
+        run: scripts/ci.sh check
+
+      # A throwaway Postgres in Docker, as a step rather than a service so that
+      # scripts/ci.sh is the same gate on a developer's machine.
+      - name: Start PostgreSQL
+        run: |
+          docker run -d --name ci-postgres -p 5432:5432 \
+            -e POSTGRES_USER=orcher -e POSTGRES_PASSWORD=orcher -e POSTGRES_DB=orcher_test \
+            postgres:17-alpine
+          for _ in $(seq 1 30); do
+            docker exec ci-postgres pg_isready -U orcher >/dev/null 2>&1 && break
+            sleep 1
+          done
+          echo "CI_DATABASE_URL=postgresql://orcher:orcher@localhost:5432/orcher_test" >> "$GITHUB_ENV"
+
+      - name: Database guards
+        run: scripts/ci.sh guards
+
+      - name: Contract suite and tenancy checks
+        env:
+          CONTRACT_SDK_RUST_DIR: ${{ github.workspace }}/sdk-rust
+        run: scripts/ci.sh contract

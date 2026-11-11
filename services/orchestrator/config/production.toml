@@ -1,0 +1,67 @@
+# Production Configuration for ORCHER Orchestrator Service
+#
+# This configuration is optimized for production deployments.
+# Review and adjust all settings before deploying.
+
+[server]
+# gRPC server configuration
+grpc_addr = "0.0.0.0:50051"
+http_addr = "0.0.0.0:8080"
+max_concurrent_streams = 1000
+
+[orchestrator]
+# Core orchestrator configuration
+# Adjust based on expected workload
+max_workers = 100
+max_concurrent_tasks = 1000
+heartbeat_timeout_secs = 90
+
+[storage]
+# Storage configuration
+# Use environment variables for sensitive values
+# Set via: the DATABASE_URL environment variable
+database_url = "${DATABASE_URL}"
+
+# Example connection strings (replace with actual values):
+# database_url = "postgresql://orcher_user:secure_password@postgres.production.svc.cluster.local:5432/orcher?sslmode=require&connect_timeout=10"
+
+[logging]
+# Logging configuration
+# Use 'info' for normal operations, 'json' for structured logging
+level = "info"
+format = "json"
+
+[health]
+# Health check configuration
+readiness_enabled = true
+liveness_enabled = true
+
+[background_jobs]
+# Background jobs configuration
+# These jobs run periodically for system maintenance
+
+# Metrics aggregation job
+metrics_enabled = true
+metrics_interval_secs = 3600  # Run every hour
+
+# Data retention job
+retention_enabled = true
+retention_interval_secs = 86400  # Run daily (24 hours)
+
+[background_jobs.retention_days]
+# Retention periods for different data types (in days)
+# Adjust based on compliance requirements and storage capacity
+workflow_executions = 90  # Keep 3 months of workflow data
+execution_logs = 30       # Keep 1 month of logs
+journal_entries = 90      # Keep 3 months of journal for audit
+task_executions = 90      # Keep 3 months of task data
+outbox_queue = 7          # Keep 1 week of completed outbox tasks
+
+[security]
+# Every caller presents an API key (`Authorization: Bearer <key>`); keys live in
+# the api_keys table. The engine refuses to listen on 0.0.0.0 without
+# authentication.
+auth_mode = "api-key"
+# One tenant: a key without an organization acts for it. Use "multi" when keys
+# belong to different organizations that must not see each other's runs.
+tenancy = "single"

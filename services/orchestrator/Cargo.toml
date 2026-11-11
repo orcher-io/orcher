@@ -1,0 +1,71 @@
+[package]
+name = "orcher-orchestrator"
+version.workspace = true
+edition = "2021"
+authors = ["ORCHER Contributors"]
+description = "ORCHER central orchestration service"
+license.workspace = true
+
+[[bin]]
+name = "orchestrator"
+path = "src/main.rs"
+
+[dependencies]
+# Core library (already implemented)
+orcher-core = { path = "../../crates/core" }
+orcher-common = { path = "../../crates/common" }
+orcher-config = { path = "../../crates/config" }
+orcher-storage = { path = "../../crates/storage" }
+orcher-events = { path = "../../crates/events", features = ["storage"] }
+orcher-monitoring = { path = "../../crates/monitoring" }
+orcher-proto = "0.15"
+orcher-dispatch = { path = "../../crates/dispatch" }
+orcher-cluster = { path = "../../crates/cluster", features = ["storage"] }
+orcher-server = { path = "../../crates/server" }
+
+# Async runtime
+tokio = { version = "1.40", features = ["full"] }
+tokio-util = "0.7"
+tokio-stream = { version = "0.1", features = ["net"] }
+
+# gRPC
+tonic = { version = "0.12", features = ["tls"] }
+tonic-health = "0.12"
+
+# HTTP server for health/metrics
+axum = "0.7"
+tower = { version = "0.4", features = ["full"] }
+tower-http = { workspace = true }
+
+# CLI
+clap = { version = "4.5", features = ["derive", "env"] }
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { workspace = true }
+toml = "0.8"
+
+# Database
+sqlx = { workspace = true, features = ["runtime-tokio-rustls", "postgres"] }
+
+# Redis (for actor state cache)
+
+# Metrics
+prometheus = { workspace = true }
+
+# Environment configuration
+dotenvy = { workspace = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = { workspace = true }

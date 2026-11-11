@@ -1,0 +1,19 @@
+# A DashMap guard is a synchronous shard lock. Held across an .await, it stays
+# locked while the task is parked, and any other task that touches the same
+# shard blocks its whole runtime thread until the first task resumes — which it
+# may never do if it was queued on that blocked thread. Under load this took
+# worker threads one by one until the engine stopped answering, SIGTERM
+# included. scripts/ci.sh denies the lint below for these types.
+await-holding-invalid-types = [
+  { path = "dashmap::mapref::one::Ref", reason = "a DashMap shard lock; drop it before awaiting" },
+  { path = "dashmap::mapref::one::RefMut", reason = "a DashMap shard lock; drop it before awaiting" },
+  { path = "dashmap::mapref::one::MappedRef", reason = "a DashMap shard lock; drop it before awaiting" },
+  { path = "dashmap::mapref::one::MappedRefMut", reason = "a DashMap shard lock; drop it before awaiting" },
+  { path = "dashmap::mapref::multiple::RefMulti", reason = "a DashMap shard lock; drop it before awaiting" },
+  { path = "dashmap::mapref::multiple::RefMutMulti", reason = "a DashMap shard lock; drop it before awaiting" },
+  { path = "dashmap::mapref::entry::Entry", reason = "a DashMap shard lock; drop it before awaiting" },
+  { path = "dashmap::mapref::entry::OccupiedEntry", reason = "a DashMap shard lock; drop it before awaiting" },
+  { path = "dashmap::mapref::entry::VacantEntry", reason = "a DashMap shard lock; drop it before awaiting" },
+  { path = "dashmap::iter::Iter", reason = "holds DashMap shard locks; collect before awaiting" },
+  { path = "dashmap::iter::IterMut", reason = "holds DashMap shard locks; collect before awaiting" },
+]

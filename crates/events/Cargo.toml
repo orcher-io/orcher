@@ -1,0 +1,91 @@
+[package]
+name = "orcher-events"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+documentation.workspace = true
+description = "Event infrastructure for the ORCHER orchestration platform"
+keywords = ["events", "orchestration", "pubsub", "event-sourcing", "workflow"]
+categories = ["asynchronous", "data-structures", "development-tools"]
+readme = "README.md"
+
+[dependencies]
+# Core async runtime
+tokio = { workspace = true, features = ["sync", "time", "macros", "rt"] }
+async-trait = { workspace = true }
+
+# Serialization
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, optional = true }
+
+# Time and date handling
+jiff = { workspace = true }
+
+# Identifiers
+uuid = { workspace = true, features = ["v4", "serde"] }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Logging and tracing
+tracing = { workspace = true, optional = true }
+
+# Database
+sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls", "json", "uuid"], optional = true }
+
+# Workspace crates (required)
+orcher-common = { workspace = true }
+
+# Optional workspace crates
+orcher-storage = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+tokio-test = { workspace = true }
+mockall = { workspace = true }
+proptest = { workspace = true }
+criterion = { workspace = true }
+tempfile = { workspace = true }
+tracing-subscriber = "0.3"
+serde = { workspace = true, features = ["derive"] }
+
+[features]
+default = ["bus", "publisher", "json", "metadata"]
+
+# Full feature set
+full = [
+    "bus",
+    "publisher",
+    "json",
+    "metadata",
+    "replay",
+    "projections",
+    "storage",
+]
+
+# Core features
+bus = []
+publisher = []
+metadata = []
+
+# Serialization options
+json = ["dep:serde_json"]
+
+# Advanced features
+replay = ["metadata"]
+projections = ["storage"]
+
+# Storage integration
+storage = ["dep:orcher-storage", "dep:sqlx", "dep:tracing", "replay"]
+
+[lib]
+name = "orcher_events"
+path = "src/lib.rs"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

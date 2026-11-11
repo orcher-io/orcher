@@ -1,0 +1,106 @@
+[package]
+name = "orcher-core"
+version.workspace = true
+edition = "2021"
+license.workspace = true
+description = "Central task execution coordinator for ORCHER orchestration platform"
+homepage = "https://github.com/netri-run/orcher"
+repository = "https://github.com/netri-run/orcher"
+readme = "README.md"
+keywords = ["orchestration", "task", "execution", "coordinator", "async"]
+categories = ["asynchronous", "concurrency", "web-programming"]
+
+[dependencies]
+# Foundation crates
+orcher-common = { path = "../common" }
+orcher-config = { path = "../config" }
+orcher-storage = { path = "../storage" }
+orcher-monitoring = { path = "../monitoring" }
+orcher-dispatch = { path = "../dispatch" }
+
+orcher-events = { path = "../events", features = ["bus", "publisher", "storage", "projections"] }
+orcher-proto = "0.15"
+
+# Cluster ownership + routing types (ShardOwnership for the write-path fencing
+# guard; ShardRouter for per-shard pool selection). The `storage` feature exposes
+# ShardRouter (it deals in PgPool); the concrete routers/store are injected at
+# runtime by the orchestrator.
+orcher-cluster = { path = "../cluster", features = ["storage"] }
+
+# Async runtime
+tokio = { version = "1.40", features = [
+    "rt-multi-thread",
+    "macros",
+    "time",
+    "sync",
+    "signal",
+    "fs",
+    "process"
+] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { workspace = true }
+# OIDC: verifying identity-provider tokens against the provider's published
+# keys (auth::oidc).
+jsonwebtoken = { workspace = true }
+reqwest = { workspace = true }
+
+# HTTP/API
+tower = { version = "0.4.13", features = ["full"] }
+http = "1.0"
+
+# gRPC
+tonic = { version = "0.12", features = ["transport", "tls", "prost"] }
+prost = "0.13"
+prost-types = "0.13"
+
+# Error handling
+thiserror = "2.0"
+
+# Async utilities
+async-trait = "0.1"
+# Shared futures: one connection attempt per peer, awaited by every relay
+# that needs it.
+futures = { workspace = true }
+hyper-util = { version = "0.1", features = ["tokio"] }
+
+# Collections and utilities
+dashmap = "6.1"
+uuid = { version = "1.10", features = ["v4", "v5", "serde"] }
+jiff = { workspace = true }
+base64 = "0.22"
+
+# Tracing
+tracing = "0.1"
+
+# Database
+sqlx = { workspace = true, features = ["chrono"] }
+
+# API key hashing
+hmac = { workspace = true }
+sha2 = { workspace = true }
+subtle = { workspace = true }
+hex = { workspace = true }
+
+# Metrics
+metrics = "0.24"
+
+# Cron parsing (chrono/chrono-tz only used internally as bridge for cron crate)
+cron = { workspace = true }
+chrono = { workspace = true }
+rand = { workspace = true }
+chrono-tz = { workspace = true }
+
+# Caching
+moka = { version = "0.12", features = ["future"] }
+
+[lib]
+name = "orcher_core"
+path = "src/lib.rs"
+
+
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
