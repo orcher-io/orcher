@@ -87,21 +87,10 @@ One process serves the gRPC API the SDKs and CLI use, and the REST API,
 dashboard, health checks and metrics on its HTTP port. Workers connect to the
 engine and poll it for work; the engine never calls them.
 
-```
-     SDK clients, CLI                Scripts, HTTP clients
-            │ gRPC :50051                  │ REST :8080
-            └───────────────┬──────────────┘
-                     ┌──────▼──────┐       ┌────────────┐
-                     │   Engine    │──────▶│ PostgreSQL │
-                     │             │       └────────────┘
-                     └──────▲──────┘
-                            │ gRPC: workers poll the engine for work
-              ┌─────────────┼─────────────┐
-        ┌─────┴────┐  ┌─────┴────┐  ┌─────┴────┐
-        │ Worker 1 │  │ Worker 2 │  │ Worker N │
-        │ (Rust)   │  │ (Python) │  │ (TS)     │
-        └──────────┘  └──────────┘  └──────────┘
-```
+<p>
+  <img alt="SDK clients and the CLI call the engine over gRPC on port 50051; scripts, HTTP clients and the dashboard use REST on port 8080. The engine stores everything in PostgreSQL. Workers in Rust, Python and TypeScript poll the engine over gRPC for work." src="./assets/architecture.svg#gh-dark-mode-only" width="100%">
+  <img alt="SDK clients and the CLI call the engine over gRPC on port 50051; scripts, HTTP clients and the dashboard use REST on port 8080. The engine stores everything in PostgreSQL. Workers in Rust, Python and TypeScript poll the engine over gRPC for work." src="./assets/architecture-light.svg#gh-light-mode-only" width="100%">
+</p>
 
 <br />
 
