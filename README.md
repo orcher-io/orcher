@@ -1,86 +1,91 @@
-<h1 align="center">Orcher</h1>
-
-<p align="center">
-  Durable workflow orchestration platform built in Rust.
+<!-- banner -->
+<p>
+  <img alt="ORCHER Engine" src="./assets/banner.svg#gh-dark-mode-only" width="100%">
+  <img alt="ORCHER Engine" src="./assets/banner-light.svg#gh-light-mode-only" width="100%">
 </p>
+<!-- /banner -->
 
-<p align="center">
-  <a href="https://github.com/orcher-io/orcher/actions"><img src="https://img.shields.io/github/actions/workflow/status/orcher-io/orcher/ci.yml?branch=main" alt="CI"></a>
-  <a href="https://github.com/orcher-io/orcher/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache_2.0-blue" alt="License"></a>
-</p>
+<p align="center"><sub>Workflows that survive crashes: the durable execution engine.</sub></p>
 
----
+<br />
 
-Orcher is a workflow orchestration engine that makes distributed systems reliable. Workflows survive process restarts, deployments, and infrastructure failures — automatically.
+<div>
+  <a href="https://github.com/orcher-io/orcher/releases/latest"><img src="https://img.shields.io/github/v/release/orcher-io/orcher?style=flat-square&labelColor=0a0a0a&color=04B385&logo=github&logoColor=white&label=release" alt="release"></a>
+  <a href="https://github.com/orcher-io/orcher/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/orcher-io/orcher/ci.yml?branch=main&style=flat-square&labelColor=0a0a0a&color=38BDF0&logo=github&logoColor=white&label=CI" alt="CI"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache_2.0-04B385?style=flat-square&labelColor=0a0a0a" alt="Apache 2.0"></a>
+</div>
 
-## Features
+<br />
 
-- **Durable Execution** — Workflows resume exactly where they left off after any failure
-- **Language-Native SDKs** — Write workflows in [Rust](https://github.com/orcher-io/sdk-rust), [Python](https://github.com/orcher-io/sdk-py), or [TypeScript](https://github.com/orcher-io/sdk-ts)
-- **Scalable** — Horizontally scale workers and the control plane independently
-- **Observable** — Full execution history, journal replay, real-time metrics
-- **Task Queues** — Route work to specific workers by capability
-- **Timers & Schedules** — Durable timers, cron schedules, delayed execution
-- **Events** — Send events to running workflows from external systems
-- **Child Workflows** — Compose complex pipelines from simpler workflows
-- **Namespaces** — Isolate environments (dev/staging/prod) or teams
-- **Batch Operations** — Cancel, terminate, reset or send an event to many workflows at once
+ORCHER runs workflows written as ordinary async code in Rust, Python or
+TypeScript, and journals every step in PostgreSQL. When a worker crashes or is
+redeployed, the run resumes from its last completed step on another worker.
 
-## Quick Start
+- <img height="14" src="https://octicons-col.vercel.app/sync/38BDF0"> **Durable execution**: a completed step is recorded once and never repeated when a run resumes
+- <img height="14" src="https://octicons-col.vercel.app/code/38BDF0"> **Three SDKs**: [Rust](https://github.com/orcher-io/sdk-rust), [Python](https://github.com/orcher-io/sdk-py) and [TypeScript](https://github.com/orcher-io/sdk-ts), sharing one core
+- <img height="14" src="https://octicons-col.vercel.app/database/38BDF0"> **PostgreSQL only**: one engine process and one database; no other service to run
+- <img height="14" src="https://octicons-col.vercel.app/clock/38BDF0"> **Timers and schedules**: durable timers, cron schedules and delayed starts that outlive the worker
+- <img height="14" src="https://octicons-col.vercel.app/broadcast/38BDF0"> **Events and child workflows**: send events to running workflows, and compose workflows from others
+- <img height="14" src="https://octicons-col.vercel.app/stack/38BDF0"> **Task queues and namespaces**: route work to the workers that can do it, and keep environments or teams apart
+- <img height="14" src="https://octicons-col.vercel.app/graph/38BDF0"> **Dashboard, REST API and metrics**: served by the engine on its HTTP port
 
-### Prerequisites
+<br />
 
-- Rust, a current stable toolchain
-- PostgreSQL 14+
+### <img height="16" src="https://octicons-col.vercel.app/play/38BDF0"> Run it
 
-Postgres is the only datastore Orcher needs; see
-[Redis is not needed](#redis-is-not-needed).
-
-### 1. Build and migrate
+The engine is published as a container image for linux/amd64 and linux/arm64.
+It needs a PostgreSQL 14+ database and nothing else:
 
 ```bash
-git clone https://github.com/orcher-io/orcher.git
-cd orcher
-
-# Create the database and apply the schema
-createdb orcher
-DATABASE_URL='postgresql://localhost/orcher' cargo run --release -p orcher-storage --bin orcher-migrate -- run
+docker network create orcher
+docker run -d --name orcher-postgres --network orcher \
+  -e POSTGRES_USER=orcher -e POSTGRES_PASSWORD=orcher -e POSTGRES_DB=orcher \
+  postgres:17-alpine
+docker run -d --name orcher --network orcher \
+  -p 127.0.0.1:50051:50051 -p 127.0.0.1:8080:8080 \
+  -e DATABASE_URL=postgresql://orcher:orcher@orcher-postgres:5432/orcher \
+  -e ORCHER_INSECURE=true \
+  ghcr.io/orcher-io/orcher:latest
+curl -fsS localhost:8080/health/ready && echo ready
 ```
 
-### 2. Start ORCHER
+Point an SDK at `http://localhost:50051`, and open
+[http://localhost:8080](http://localhost:8080) for the dashboard. More on the
+image, its settings and its licences: [docker/engine/README.md](docker/engine/README.md).
 
-One process serves everything: the gRPC API the SDKs and CLI use, and the REST
-API, health checks and metrics on its HTTP port. No Redis instance is needed.
+> [!NOTE]
+> `ORCHER_INSECURE=true` runs without authentication, which suits a laptop. The
+> engine refuses to serve unauthenticated on an address other machines can reach
+> unless you set it.
 
-```bash
-DATABASE_URL='postgresql://localhost/orcher' cargo run --release -p orcher-orchestrator   # gRPC :50051, HTTP :8080
-```
+The [ORCHER CLI](https://github.com/orcher-io/cli) does the same in one command,
+`orcher dev start --engine-version 0.7.0`, and drives a running engine from a
+terminal.
 
-To drive it from a terminal, install the [ORCHER CLI](https://github.com/orcher-io/cli)
-(`brew install orcher-io/tap/orcher`, `cargo install orcher`, `pip install orcher`
-or `npm install -g orcher`) and check it can reach the engine with `orcher status`.
+<br />
 
-### 3. Run a workflow
+### <img height="16" src="https://octicons-col.vercel.app/rocket/38BDF0"> Run a workflow
 
-The examples run in the `examples` namespace, so create it first with
-`orcher namespace create examples`. Then run the durable execution example from
-the [Rust SDK's examples](https://github.com/orcher-io/sdk-rust/tree/main/examples):
+The [quickstart](https://github.com/orcher-io/quickstart) runs one order
+workflow in Rust, Python and TypeScript against this image, then kills the
+worker midway and shows the run resume. To write your own, pick an SDK:
 
-```bash
-git clone https://github.com/orcher-io/sdk-rust.git
-cd sdk-rust
-cargo run -p orcher-example-durable-execution -- --e2e
-```
+| SDK | Repository | Install |
+|-----|-----------|---------|
+| Rust | [orcher-io/sdk-rust](https://github.com/orcher-io/sdk-rust) | `cargo add orcher-sdk` |
+| Python | [orcher-io/sdk-py](https://github.com/orcher-io/sdk-py) | `pip install orcher-sdk` |
+| TypeScript | [orcher-io/sdk-ts](https://github.com/orcher-io/sdk-ts) | `npm install @orcher/sdk` |
 
-Or the Python SDK:
+The SDKs share a core, [orcher-io/sdk-core](https://github.com/orcher-io/sdk-core),
+and speak the API defined in [orcher-io/protos](https://github.com/orcher-io/protos).
 
-```bash
-cd examples/sdk-py/durable-execution
-pip install -e .
-python -m src.main
-```
+<br />
 
-## Architecture
+### <img height="16" src="https://octicons-col.vercel.app/workflow/38BDF0"> Architecture
+
+One process serves the gRPC API the SDKs and CLI use, and the REST API,
+dashboard, health checks and metrics on its HTTP port. Workers connect to the
+engine and poll it for work; the engine never calls them.
 
 ```
      SDK clients, CLI                Scripts, HTTP clients
@@ -98,7 +103,28 @@ python -m src.main
         └──────────┘  └──────────┘  └──────────┘
 ```
 
-## Project Structure
+<br />
+
+### <img height="16" src="https://octicons-col.vercel.app/tools/38BDF0"> Build from source
+
+Needs a current stable Rust toolchain and PostgreSQL 14+.
+
+```bash
+git clone https://github.com/orcher-io/orcher.git
+cd orcher
+
+# Create the database and apply the schema
+createdb orcher
+DATABASE_URL='postgresql://localhost/orcher' cargo run --release -p orcher-storage --bin orcher-migrate -- run
+
+# Start the engine: gRPC :50051, HTTP :8080
+DATABASE_URL='postgresql://localhost/orcher' cargo run --release -p orcher-orchestrator
+```
+
+```bash
+cargo test                # run the tests
+cargo check --workspace   # check all crates
+```
 
 ```
 orcher/
@@ -117,19 +143,9 @@ orcher/
 └── examples/           # SDK examples (Rust, Python, TypeScript)
 ```
 
-## SDKs
+<br />
 
-| SDK | Repository | Install |
-|-----|-----------|---------|
-| Rust | [orcher-io/sdk-rust](https://github.com/orcher-io/sdk-rust) | `cargo add orcher-sdk` |
-| Python | [orcher-io/sdk-py](https://github.com/orcher-io/sdk-py) | `pip install orcher-sdk` |
-| TypeScript | [orcher-io/sdk-ts](https://github.com/orcher-io/sdk-ts) | `npm install @orcher/sdk` |
-
-SDKs share a common core: [orcher-io/sdk-core](https://github.com/orcher-io/sdk-core) (Rust, published as [`orcher-sdk-core`](https://crates.io/crates/orcher-sdk-core)) with language bindings via PyO3 (Python) and Neon (TypeScript).
-
-Protocol definitions: [orcher-io/protos](https://github.com/orcher-io/protos)
-
-## REST API
+### <img height="16" src="https://octicons-col.vercel.app/plug/38BDF0"> REST API
 
 The engine serves a REST API on its HTTP port (8080 by default), behind the
 same authentication as its gRPC API:
@@ -142,6 +158,7 @@ same authentication as its gRPC API:
 | `GET /api/v1/executions/:id/status` | Get execution status |
 | `GET /api/v1/executions/:id/journal` | Get execution journal |
 | `POST /api/v1/executions/:id/cancel` | Cancel execution |
+| `POST /api/v1/executions/:id/reset` | Reset an execution to a journal entry (after 0.7.0) |
 | `GET /api/v1/namespaces` | List namespaces |
 | `POST /api/v1/namespaces` | Create namespace |
 | `GET /api/v1/schedules` | List schedules |
@@ -152,7 +169,9 @@ same authentication as its gRPC API:
 | `POST /api/v1/api-keys` | Issue an API key |
 | `DELETE /api/v1/api-keys/:id` | Revoke an API key |
 
-## Configuration
+<br />
+
+### <img height="16" src="https://octicons-col.vercel.app/gear/38BDF0"> Configuration
 
 Environment variables:
 
@@ -162,9 +181,8 @@ Environment variables:
 | `GRPC_BIND_ADDR` | `127.0.0.1:50051` | gRPC API address (`--grpc-addr`) |
 | `HTTP_BIND_ADDR` | `127.0.0.1:8080` | REST API, health and metrics address (`--http-addr`) |
 | `ORCHER_ORCHESTRATOR_CONFIG` | — | TOML config file (`--config`), e.g. `[security] auth_mode` |
+| `ORCHER_UI_ENABLED` | `true` | `false` (or `--no-ui`) stops the engine serving the dashboard |
 | `ORCHER_INSECURE` | unset | `true` serves without authentication on an address other machines can reach |
-
-### Redis is not needed
 
 The orchestrator stores and delivers everything through PostgreSQL. Sync-match,
 the opt-in dispatch path enabled with `ORCHER_USE_SYNC_MATCH=true`, hands work
@@ -172,31 +190,25 @@ to waiting workers in-process and also needs only PostgreSQL. `REDIS_URL` and
 `ORCHER_USE_STREAMS` have no effect; the orchestrator logs a warning if they are
 set.
 
-## Development
+<br />
 
-```bash
-# Run tests
-cargo test
-
-# Run benchmarks
-bash scripts/benchmark.sh --quick --sdk rust
-
-# Check all crates
-cargo check --workspace
-```
-
-## Upgrading
+### <img height="16" src="https://octicons-col.vercel.app/arrow-up/38BDF0"> Upgrading
 
 Behaviour changes and migration steps for each release are in
 [UPGRADING.md](UPGRADING.md); read it before moving an existing deployment to a
 new release.
 
-## Security
+<br />
 
-To report a vulnerability, see [SECURITY.md](SECURITY.md). Please do not open
-a public issue for one.
+### <img height="16" src="https://octicons-col.vercel.app/heart/38BDF0"> Contributing
 
-## License
+Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+To report a vulnerability, see [SECURITY.md](SECURITY.md), and please do not
+open a public issue for one.
 
-Orcher is licensed under the Apache License 2.0; see [LICENSE](LICENSE). That
-includes the prebuilt engine images at `ghcr.io/orcher-io/orcher`.
+<br />
+
+### <img height="16" src="https://octicons-col.vercel.app/law/38BDF0"> License
+
+Licensed under the [Apache License, Version 2.0](LICENSE). That includes the
+prebuilt engine images at `ghcr.io/orcher-io/orcher`.
