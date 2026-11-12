@@ -5,43 +5,43 @@
   <rect width="1000" height="470" fill="#FAFAFA"/>
   <rect width="1000" height="470" fill="url(#dots)"/>
   <text x="60" y="42" text-anchor="start" font-family="'SF Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="12" letter-spacing="2" fill="#8B9299">CALLERS</text>
-  <rect x="60" y="56" width="300" height="64" fill="#FFFFFF" stroke="#D9DCE0" stroke-width="2"/>
+  <rect x="60" y="56" width="300" height="64" fill="#FFFFFF" stroke="#D9DCE0" stroke-width="1"/>
   <text x="210" y="84" text-anchor="middle" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#0A0A0A">SDK clients, CLI</text>
   <text x="210" y="106" text-anchor="middle" font-family="'SF Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="12" fill="#5F646B">start, query and cancel runs</text>
-  <rect x="400" y="56" width="300" height="64" fill="#FFFFFF" stroke="#D9DCE0" stroke-width="2"/>
+  <rect x="400" y="56" width="300" height="64" fill="#FFFFFF" stroke="#D9DCE0" stroke-width="1"/>
   <text x="550" y="84" text-anchor="middle" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#0A0A0A">Scripts, HTTP clients</text>
   <text x="550" y="106" text-anchor="middle" font-family="'SF Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="12" fill="#5F646B">and the dashboard</text>
-  <path d="M210,120 V168 H350 V196" fill="none" stroke="#1C9FD6" stroke-width="2"/>
-  <polygon points="344,195 356,195 350,204" fill="#1C9FD6"/>
-  <path d="M550,120 V168 H410 V196" fill="none" stroke="#1C9FD6" stroke-width="2"/>
-  <polygon points="404,195 416,195 410,204" fill="#1C9FD6"/>
+  <path d="M210,120 V168 H350 V196" fill="none" stroke="#1C9FD6" stroke-width="1"/>
+  <polygon points="345.5,197 354.5,197 350,204" fill="#1C9FD6"/>
+  <path d="M550,120 V168 H410 V196" fill="none" stroke="#1C9FD6" stroke-width="1"/>
+  <polygon points="405.5,197 414.5,197 410,204" fill="#1C9FD6"/>
   <text x="222" y="150" text-anchor="start" font-family="'SF Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="13" fill="#1C9FD6">gRPC :50051</text>
   <text x="562" y="150" text-anchor="start" font-family="'SF Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="13" fill="#1C9FD6">REST :8080</text>
-  <rect x="240" y="204" width="280" height="84" fill="#FFFFFF" stroke="#1C9FD6" stroke-width="2"/>
-  <rect x="240" y="204" width="280" height="3" fill="#1C9FD6"/>
+  <rect x="240" y="204" width="280" height="84" fill="#FFFFFF" stroke="#1C9FD6" stroke-width="1"/>
+  <rect x="240" y="204" width="280" height="2" fill="#1C9FD6"/>
   <text x="380" y="242" text-anchor="middle" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#0A0A0A">Engine</text>
   <text x="380" y="268" text-anchor="middle" font-family="'SF Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="12" fill="#5F646B">one process</text>
   <text x="680" y="190" text-anchor="start" font-family="'SF Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="12" letter-spacing="2" fill="#8B9299">STORAGE</text>
-  <path d="M520,246 H670" fill="none" stroke="#3E8E4F" stroke-width="2"/>
-  <polygon points="671,240 671,252 680,246" fill="#3E8E4F"/>
-  <rect x="680" y="204" width="260" height="84" fill="#FFFFFF" stroke="#D9DCE0" stroke-width="2"/>
+  <path d="M520,246 H670" fill="none" stroke="#3E8E4F" stroke-width="1"/>
+  <polygon points="673,241.5 673,250.5 680,246" fill="#3E8E4F"/>
+  <rect x="680" y="204" width="260" height="84" fill="#FFFFFF" stroke="#D9DCE0" stroke-width="1"/>
   <text x="810" y="242" text-anchor="middle" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#0A0A0A">PostgreSQL</text>
   <text x="810" y="268" text-anchor="middle" font-family="'SF Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="12" fill="#5F646B">journal, queues, timers</text>
   <text x="60" y="356" text-anchor="start" font-family="'SF Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="12" letter-spacing="2" fill="#8B9299">WORKERS</text>
-  <rect x="50" y="370" width="200" height="64" fill="#FFFFFF" stroke="#D9DCE0" stroke-width="2"/>
+  <rect x="50" y="370" width="200" height="64" fill="#FFFFFF" stroke="#D9DCE0" stroke-width="1"/>
   <text x="150" y="398" text-anchor="middle" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0A0A0A">Worker 1</text>
   <text x="150" y="420" text-anchor="middle" font-family="'SF Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="12" fill="#5F646B">Rust</text>
-  <circle cx="72" cy="392" r="4.5" fill="#3E8E4F"/>
-  <rect x="280" y="370" width="200" height="64" fill="#FFFFFF" stroke="#D9DCE0" stroke-width="2"/>
+  <circle cx="72" cy="392" r="4" fill="#3E8E4F"/>
+  <rect x="280" y="370" width="200" height="64" fill="#FFFFFF" stroke="#D9DCE0" stroke-width="1"/>
   <text x="380" y="398" text-anchor="middle" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0A0A0A">Worker 2</text>
   <text x="380" y="420" text-anchor="middle" font-family="'SF Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="12" fill="#5F646B">Python</text>
-  <circle cx="302" cy="392" r="4.5" fill="#3E8E4F"/>
-  <rect x="510" y="370" width="200" height="64" fill="#FFFFFF" stroke="#D9DCE0" stroke-width="2"/>
+  <circle cx="302" cy="392" r="4" fill="#3E8E4F"/>
+  <rect x="510" y="370" width="200" height="64" fill="#FFFFFF" stroke="#D9DCE0" stroke-width="1"/>
   <text x="610" y="398" text-anchor="middle" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0A0A0A">Worker N</text>
   <text x="610" y="420" text-anchor="middle" font-family="'SF Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="12" fill="#5F646B">TypeScript</text>
-  <circle cx="532" cy="392" r="4.5" fill="#3E8E4F"/>
-  <path d="M150,370 V330 H610 V370" fill="none" stroke="#5F646B" stroke-width="2" stroke-dasharray="6 6"/>
-  <path d="M380,370 V298" fill="none" stroke="#5F646B" stroke-width="2" stroke-dasharray="6 6"/>
-  <polygon points="374,299 386,299 380,290" fill="#5F646B"/>
+  <circle cx="532" cy="392" r="4" fill="#3E8E4F"/>
+  <path d="M150,370 V330 H610 V370" fill="none" stroke="#5F646B" stroke-width="1" stroke-dasharray="5 5"/>
+  <path d="M380,370 V298" fill="none" stroke="#5F646B" stroke-width="1" stroke-dasharray="5 5"/>
+  <polygon points="375.5,297 384.5,297 380,290" fill="#5F646B"/>
   <text x="396" y="318" text-anchor="start" font-family="'SF Mono', 'Fira Code', Menlo, Consolas, monospace" font-size="13" fill="#5F646B">gRPC: workers poll the engine for work</text>
 </svg>
