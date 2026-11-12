@@ -6,7 +6,6 @@ license.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
-documentation.workspace = true
 description = "Execution dispatch system for ORCHER - polling, routing, capacity management"
 keywords = ["orchestration", "dispatch", "polling", "async"]
 categories = ["asynchronous", "concurrency"]
@@ -31,7 +30,6 @@ futures = { workspace = true }
 # Concurrency
 dashmap = { workspace = true }
 parking_lot = { workspace = true }
-crossbeam = "0.8"
 
 # Serialization
 serde = { workspace = true }

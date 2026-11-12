@@ -18,14 +18,9 @@ resolver = "2"
 version = "0.7.0"
 edition = "2021"
 license = "Apache-2.0"
-authors = ["ORCHER Team <team@netri.run>"]
-homepage = "https://github.com/netri-run/orcher"
-repository = "https://github.com/netri-run/orcher"
-documentation = "https://docs.rs/orcher"
-description = "High-performance task orchestration platform built with Rust"
-keywords = ["orchestration", "task", "workflow", "scheduler", "async"]
-categories = ["asynchronous", "web-programming", "development-tools"]
-readme = "README.md"
+authors = ["ORCHER Contributors"]
+homepage = "https://github.com/orcher-io"
+repository = "https://github.com/orcher-io/orcher"
 
 [workspace.dependencies]
 # Core async runtime - tokio first approach
@@ -40,7 +35,6 @@ serde = { version = "1.0", features = ["derive"] }
 # third of floats come back one unit in the last place off, and a task result
 # is parsed twice before its workflow replays it.
 serde_json = { version = "1.0", features = ["float_roundtrip"] }
-bincode = "1.3"
 rmp-serde = "1.1"
 base64 = "0.22"
 
@@ -48,7 +42,6 @@ base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.8"
 jiff = { version = "0.2", features = ["serde"] }
-jiff-sqlx = "0.1"
 cron = "0.12"
 humantime = "2.1"
 
@@ -73,30 +66,18 @@ redis = { version = "0.32.7", features = ["tokio-comp", "streams", "cluster", "c
 
 # Connection pooling
 deadpool = "0.10"
-deadpool-postgres = "0.12"
 deadpool-redis = "0.22"
 
 # Security and cryptography
 jsonwebtoken = "9.2"
-bcrypt = "0.15"
-argon2 = "0.5"
-ring = "0.17"
-rustls = "0.21"
 rustls-pemfile = "2.0"
-totp-rs = "5.4"
-oauth2 = "4.4"
-ldap3 = "0.11"
 hmac = "0.12"
 sha2 = "0.10"
 subtle = "2.6"
 
 # Configuration
-clap = { version = "4.4", features = ["derive", "env"] }
-config = "0.14"
 serde_yaml = "0.9"
-toml = "0.8"
 url = "2.4"
-notify = "6.1"
 dotenvy = "0.15"
 
 # Logging and monitoring
@@ -104,47 +85,26 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 prometheus = "0.13"
 metrics = "0.24"
-metrics-prometheus = "0.8"
 tokio-metrics = "0.3"
-sysinfo = "0.30"
 
 # Distributed tracing
-opentelemetry = "0.21"
-opentelemetry_sdk = { version = "0.21", features = ["rt-tokio"] }
-opentelemetry-jaeger = { version = "0.18", features = ["rt-tokio"] }
-tracing-opentelemetry = "0.21"
 
 # Workflow and dependencies
-petgraph = "0.6"
-handlebars = "4.0"
 regex = "1.0"
 
 # Lock-free data structures
-crossbeam-queue = "0.3"
 dashmap = "5.5"
 
 # OpenAPI documentation
 utoipa = { version = "4.2", features = ["axum_extras", "uuid"] }
-utoipa-swagger-ui = { version = "6.0", features = ["axum"] }
-utoipa-redoc = { version = "4.0", features = ["axum"] }
-utoipa-rapidoc = { version = "4.0", features = ["axum"] }
-utoipa-scalar = { version = "0.1", features = ["axum"] }
-tower-serve-static = "0.1"
 serde_urlencoded = "0.7"
 
 # Additional server dependencies
-governor = "0.6"
-moka = { version = "0.12", features = ["future"] }
-tokio-tungstenite = { version = "0.21", features = ["rustls-tls-webpki-roots"] }
 tokio-rustls = "0.25"
-minijinja = { version = "2.0", features = ["json"] }
 ipnet = "2.9"
 pin-project-lite = "0.2"
-infer = "0.16"
 mime = "0.3"
 mime_guess = "2.0"
-signal-hook = "0.3"
-signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
 once_cell = "1.19"
 parking_lot = "0.12"
 bytes = "1.7"
@@ -155,13 +115,10 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 tokio-util = { version = "0.7" }
 
 # Distributed systems
-raft = "0.7"
 
 # Health checks and alerting
-lettre = "0.11"
 
 # System utilities
-num_cpus = "1.16"
 
 # Validation
 validator = { version = "0.16", features = ["derive"] }
@@ -180,24 +137,9 @@ path = "crates/storage"
 [workspace.dependencies.orcher-monitoring]
 path = "crates/monitoring"
 
-[workspace.dependencies.orcher-dispatch]
-path = "crates/dispatch"
-
-
 [workspace.dependencies.orcher-core]
 path = "crates/core"
 
-[workspace.dependencies.orcher-events]
-path = "crates/events"
-
-# Temporarily commented out - cluster not yet implemented
-# [workspace.dependencies.orcher-cluster]
-# path = "crates/cluster"
-
-[workspace.dependencies.orcher-server]
-path = "crates/server"
-
-# Development dependencies
 [workspace.dependencies.criterion]
 version = "0.5"
 features = ["html_reports"]
@@ -226,12 +168,6 @@ features = ["derive", "uuid"]
 
 [workspace.dependencies.testcontainers]
 version = "0.25"
-
-# Workspace metadata
-[workspace.metadata]
-msrv = "1.70.0"
-documentation = "https://docs.rs/orcher"
-homepage = "https://github.com/netri-run/orcher"
 
 # ============================================================================
 # COMPILATION OPTIMIZATION PROFILES

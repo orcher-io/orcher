@@ -6,7 +6,6 @@ license.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
-documentation.workspace = true
 description = "Common types, utilities, and error handling for ORCHER task orchestration platform"
 keywords = ["orchestration", "types", "error-handling", "async"]
 categories = ["data-structures", "asynchronous"]
@@ -21,7 +20,7 @@ uuid = ["dep:uuid"]
 # Optional feature modules
 validation = []
 monitoring = ["dep:tracing"]
-test-utils = ["dep:fake", "dep:proptest"]
+test-utils = []
 rand = ["dep:rand"]
 postgres = ["dep:sqlx"]
 
@@ -35,29 +34,20 @@ async-trait.workspace = true
 # Serialization and data handling
 serde = { workspace = true }
 serde_json = { workspace = true }
-bincode = { workspace = true }
-rmp-serde = { workspace = true }
 ciborium = "0.2"
-crc32fast = "1.3"
 
 # Time and identifiers
 chrono = { workspace = true }
-chrono-tz = { workspace = true }
 jiff = { workspace = true }
 uuid = { workspace = true, optional = true, features = ["serde", "v4", "std"] }
-humantime = { workspace = true }
 
 # Error handling
-thiserror = { workspace = true }
-anyhow = { workspace = true }
 
 # Utilities
 rand = { workspace = true, optional = true }
 regex = { workspace = true }
 url = { workspace = true }
-cron = { workspace = true }
 tracing = { workspace = true, optional = true }
-num_cpus = "1.16"
 
 # Tokio utilities
 tokio-stream = { workspace = true, features = ["sync"] }
@@ -67,19 +57,13 @@ tokio-util = { workspace = true }
 sqlx = { workspace = true, optional = true }
 
 # Optional dependencies for testing
-fake = { workspace = true, optional = true }
-proptest = { workspace = true, optional = true }
-pin-project = "1.1.10"
 fastrand = "2.0"
 
 [build-dependencies]
 jiff = { workspace = true }
-rustc_version = "0.4"
 
 
 [dev-dependencies]
 tokio-test = { workspace = true }
 tempfile = { workspace = true }
 criterion = { workspace = true, features = ["html_reports", "async_tokio"] }
-fake = { workspace = true }
-proptest = { workspace = true }

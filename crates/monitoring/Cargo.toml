@@ -6,7 +6,6 @@ license.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
-documentation.workspace = true
 description = "Observability and monitoring framework for ORCHER task orchestration platform"
 keywords = ["monitoring", "observability", "metrics", "tracing", "health"]
 categories = ["development-tools", "web-programming", "asynchronous"]
@@ -17,7 +16,7 @@ default = ["prometheus", "tracing-export", "health-checks"]
 
 # Core monitoring features
 prometheus = ["dep:metrics-prometheus", "dep:prometheus"]
-tracing-export = ["dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry-jaeger"]
+tracing-export = ["dep:tracing-opentelemetry", "dep:opentelemetry"]
 health-checks = []
 
 # Optional features
@@ -50,7 +49,6 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 tracing-opentelemetry = { version = "0.22", optional = true }
 opentelemetry = { version = "0.21", features = ["trace"], optional = true }
-opentelemetry-jaeger = { version = "0.20", optional = true }
 opentelemetry-otlp = { version = "0.14", optional = true }
 
 # Serialization

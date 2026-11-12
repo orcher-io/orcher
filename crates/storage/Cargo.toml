@@ -6,7 +6,6 @@ license.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
-documentation.workspace = true
 description = "Data persistence and caching layer for ORCHER task orchestration platform"
 keywords = ["storage", "database", "postgres", "redis", "repository"]
 categories = ["database", "caching", "asynchronous"]
@@ -19,7 +18,7 @@ required-features = ["postgres", "migrations"]
 [features]
 default = ["postgres", "migrations", "compression"]
 compression = ["dep:flate2"]
-postgres = ["dep:sqlx", "dep:deadpool-postgres", "orcher-common/postgres"]
+postgres = ["dep:sqlx", "orcher-common/postgres"]
 redis = ["dep:redis", "dep:deadpool-redis"]
 migrations = ["sqlx/migrate"]
 backup = ["dep:flate2"]
@@ -62,7 +61,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Database - PostgreSQL
 sqlx = { workspace = true, optional = true, features = ["chrono"] }
-deadpool-postgres = { workspace = true, optional = true }
 
 # Caching - Redis
 redis = { workspace = true, optional = true, features = ["tokio-comp", "streams", "cluster", "connection-manager"] }

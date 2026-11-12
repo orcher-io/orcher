@@ -6,7 +6,6 @@ license.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
-documentation.workspace = true
 description = "Cluster membership and shard ownership for ORCHER horizontal scaling"
 keywords = ["orchestration", "cluster", "sharding", "distributed"]
 categories = ["asynchronous", "concurrency"]

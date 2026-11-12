@@ -6,7 +6,6 @@ license.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
-documentation.workspace = true
 description = "The REST API of the Orcher engine"
 keywords = ["api", "server", "http", "websocket", "orchestration"]
 categories = ["web-programming::http-server", "asynchronous", "api-bindings"]
@@ -141,10 +140,8 @@ async-stream = "0.3"
 sqlx = { workspace = true, features = ["runtime-tokio-rustls", "postgres", "uuid"] }
 
 # WebSocket support
-tokio-tungstenite = { workspace = true }
 
 # Security and TLS
-rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
 tokio-rustls = { workspace = true }
 
@@ -188,7 +185,6 @@ sha2 = "0.10"
 flate2 = { workspace = true }
 
 # Content-Type detection
-infer = { workspace = true }
 
 # IP address handling and geolocation
 ipnet = { workspace = true }

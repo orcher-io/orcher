@@ -30,7 +30,6 @@ tokio-stream = { version = "0.1", features = ["net"] }
 
 # gRPC
 tonic = { version = "0.12", features = ["tls"] }
-tonic-health = "0.12"
 
 # HTTP server for health/metrics
 axum = "0.7"

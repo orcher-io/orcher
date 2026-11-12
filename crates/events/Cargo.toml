@@ -6,7 +6,6 @@ license.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
-documentation.workspace = true
 description = "Event infrastructure for the ORCHER orchestration platform"
 keywords = ["events", "orchestration", "pubsub", "event-sourcing", "workflow"]
 categories = ["asynchronous", "data-structures", "development-tools"]
