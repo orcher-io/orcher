@@ -138,7 +138,15 @@ impl StorageFactory {
     /// - Environment variables have invalid values
     /// - Backend creation fails
     pub async fn from_env() -> OrcherResult<Arc<dyn WasmStorage>> {
-        let storage_type = std::env::var("ORCHER_STORAGE_TYPE").unwrap_or_else(|_| {
+        Self::from_vars(|name| std::env::var(name).ok()).await
+    }
+
+    /// Create the backend reading its settings through `var`, which returns a
+    /// variable's value or `None` when it is unset. `from_env` passes the
+    /// process environment; tests pass their own values, since the process
+    /// environment is shared by every test running at once.
+    async fn from_vars(var: impl Fn(&str) -> Option<String>) -> OrcherResult<Arc<dyn WasmStorage>> {
+        let storage_type = var("ORCHER_STORAGE_TYPE").unwrap_or_else(|| {
             debug!("ORCHER_STORAGE_TYPE not set, defaulting to filesystem");
             "filesystem".to_string()
         });
@@ -150,7 +158,7 @@ impl StorageFactory {
 
         match storage_type.to_lowercase().as_str() {
             "filesystem" | "fs" => {
-                let storage_path = std::env::var("ORCHER_STORAGE_PATH").unwrap_or_else(|_| {
+                let storage_path = var("ORCHER_STORAGE_PATH").unwrap_or_else(|| {
                     debug!("ORCHER_STORAGE_PATH not set, using default");
                     ".orcher/workflows".to_string()
                 });
@@ -165,8 +173,7 @@ impl StorageFactory {
                     );
                 }
 
-                let enable_compression = std::env::var("ORCHER_STORAGE_COMPRESSION")
-                    .ok()
+                let enable_compression = var("ORCHER_STORAGE_COMPRESSION")
                     .and_then(|v| v.parse::<bool>().ok())
                     .unwrap_or(false);
 
@@ -177,14 +184,14 @@ impl StorageFactory {
             }
             #[cfg(feature = "s3")]
             "s3" => {
-                let bucket = std::env::var("ORCHER_S3_BUCKET").map_err(|_| {
+                let bucket = var("ORCHER_S3_BUCKET").ok_or_else(|| {
                     orcher_common::error::OrcherError::invalid_input_field(
                         "ORCHER_S3_BUCKET environment variable is required for S3 storage",
                         "ORCHER_S3_BUCKET",
                     )
                 })?;
 
-                let region = std::env::var("ORCHER_S3_REGION").unwrap_or_else(|_| {
+                let region = var("ORCHER_S3_REGION").unwrap_or_else(|| {
                     debug!("ORCHER_S3_REGION not set, using default");
                     "us-east-1".to_string()
                 });
@@ -192,13 +199,13 @@ impl StorageFactory {
                 let mut config = S3Config::new(bucket, region);
 
                 // Optional endpoint (for S3-compatible services like MinIO)
-                if let Ok(endpoint) = std::env::var("ORCHER_S3_ENDPOINT") {
+                if let Some(endpoint) = var("ORCHER_S3_ENDPOINT") {
                     debug!("Using custom S3 endpoint: {}", endpoint);
                     config = config.with_endpoint(endpoint);
                 }
 
                 // Optional key prefix
-                if let Ok(prefix) = std::env::var("ORCHER_S3_PREFIX") {
+                if let Some(prefix) = var("ORCHER_S3_PREFIX") {
                     debug!("Using S3 key prefix: {}", prefix);
                     config = config.with_prefix(prefix);
                 }
@@ -307,32 +314,37 @@ mod tests {
         assert_eq!(storage.backend_type(), StorageBackendType::Filesystem);
     }
 
+    /// A lookup over `pairs`, standing in for the process environment.
+    fn vars(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
+        let pairs: Vec<(String, String)> = pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        move |name| {
+            pairs
+                .iter()
+                .find(|(k, _)| k == name)
+                .map(|(_, v)| v.clone())
+        }
+    }
+
     #[tokio::test]
     async fn test_from_env_filesystem() {
-        // Set environment variables
-        std::env::set_var("ORCHER_STORAGE_TYPE", "filesystem");
-        std::env::set_var("ORCHER_STORAGE_PATH", "/tmp/orcher-test");
-
-        let result = StorageFactory::from_env().await;
+        let result = StorageFactory::from_vars(vars(&[
+            ("ORCHER_STORAGE_TYPE", "filesystem"),
+            ("ORCHER_STORAGE_PATH", "/tmp/orcher-test"),
+        ]))
+        .await;
         assert!(result.is_ok());
 
         let storage = result.unwrap();
         assert_eq!(storage.backend_type(), StorageBackendType::Filesystem);
-
-        // Clean up
-        std::env::remove_var("ORCHER_STORAGE_TYPE");
-        std::env::remove_var("ORCHER_STORAGE_PATH");
     }
 
     #[tokio::test]
     async fn test_from_env_invalid_type() {
-        std::env::set_var("ORCHER_STORAGE_TYPE", "invalid");
-
-        let result = StorageFactory::from_env().await;
+        let result = StorageFactory::from_vars(vars(&[("ORCHER_STORAGE_TYPE", "invalid")])).await;
         assert!(result.is_err());
-
-        // Clean up
-        std::env::remove_var("ORCHER_STORAGE_TYPE");
     }
 
     #[tokio::test]
