@@ -33,6 +33,11 @@ export RUSTFLAGS="${RUSTFLAGS:--D warnings}"
 
 step() { printf '\n==> %s\n' "$*"; }
 
+# Whether a cargo log holds a warning, coloured or not.
+has_cargo_warnings() {
+  sed $'s/\x1b\\[[0-9;]*m//g' "$1" | grep -q '^warning'
+}
+
 run_check() {
   step "format"
   cargo fmt --all --check
@@ -42,7 +47,19 @@ run_check() {
   step "SQL names its columns"
   bash scripts/check-sql-columns.sh
   step "compile (offline, all targets, deny warnings)"
-  cargo check --workspace --all-targets --locked
+  # RUSTFLAGS turns rustc's warnings into errors but not Cargo's own (an unused
+  # dependency, a redundant manifest field), so those are refused here: every
+  # later cargo call would repeat them, and nobody reads a warning printed fifty
+  # times.
+  local log
+  log=$(mktemp)
+  cargo check --workspace --all-targets --locked 2>&1 | tee "$log"
+  if has_cargo_warnings "$log"; then
+    rm -f "$log"
+    echo "ci: cargo printed the warnings above; the build allows none" >&2
+    return 1
+  fi
+  rm -f "$log"
   # Clippy's default lints, as errors. Named among them, the lints for a lock
   # held across an .await, which compile cleanly and hang a runtime thread
   # under load; clippy.toml adds DashMap's guards to them. Code inside macro

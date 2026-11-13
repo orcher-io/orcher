@@ -6,7 +6,6 @@ license.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
-documentation.workspace = true
 description = "The REST API of the Orcher engine"
 keywords = ["api", "server", "http", "websocket", "orchestration"]
 categories = ["web-programming::http-server", "asynchronous", "api-bindings"]
@@ -15,15 +14,12 @@ readme = "README.md"
 [dependencies]
 # ORCHER workspace crates - core platform dependencies
 orcher-common = { workspace = true }
-orcher-config = { workspace = true }
 orcher-storage = { workspace = true }
-orcher-monitoring = { workspace = true }
 orcher-core = { workspace = true }
 orcher-proto = "0.15"
 
 # gRPC dependencies
 tonic = { version = "0.12", features = ["transport", "tls", "prost"] }
-prost = "0.13"
 prost-types = "0.13"
 hostname = "0.4"
 
@@ -36,7 +32,6 @@ tokio = { workspace = true, features = [
     "parking_lot",
 ] }
 futures = { workspace = true }
-futures-util = { workspace = true }
 async-trait = { workspace = true }
 
 # HTTP server framework and middleware
@@ -84,8 +79,6 @@ tower-http = { workspace = true, features = [
 # Serialization and data handling
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { workspace = true }
-serde_yaml = { workspace = true }
-serde_urlencoded = { workspace = true }
 
 # OpenAPI documentation and UI
 utoipa = { workspace = true, features = [
@@ -98,41 +91,21 @@ utoipa = { workspace = true, features = [
 
 # Time and date handling
 jiff = { workspace = true }
-humantime = { workspace = true }
 
 chrono = { workspace = true }
 # Unique identifiers
 uuid = { workspace = true, features = ["v4", "serde", "fast-rng"] }
 
 # Error handling
-anyhow = { workspace = true }
 thiserror = { workspace = true }
 
 # Logging and observability
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = [
-    "env-filter",
-    "json",
-    "registry",
-    "fmt",
-    "ansi",
-    "smallvec",
-    "tracing-log",
-] }
 
 # Metrics and monitoring
 metrics = { workspace = true }
 
 # HTTP client for health checks and external APIs
-reqwest = { workspace = true, features = [
-    "json",
-    "rustls-tls",
-    "stream",
-    "multipart",
-    "cookies",
-    "gzip",
-    "brotli",
-] }
 
 # Async stream utilities for SSE
 async-stream = "0.3"
@@ -141,77 +114,48 @@ async-stream = "0.3"
 sqlx = { workspace = true, features = ["runtime-tokio-rustls", "postgres", "uuid"] }
 
 # WebSocket support
-tokio-tungstenite = { workspace = true }
 
 # Security and TLS
-rustls = { workspace = true }
-rustls-pemfile = { workspace = true }
-tokio-rustls = { workspace = true }
 
 
 # JSON schema validation
 validator = { workspace = true, features = ["derive", "card"] }
 
 # Cross-cutting utilities
-once_cell = { workspace = true }
-dashmap = { workspace = true }
 bytes = { workspace = true }
-mime = { workspace = true }
-mime_guess = { workspace = true }
 
 
 
 
 # Environment variable handling
-dotenvy = { workspace = true }
 
 # URL parsing and manipulation
 url = { workspace = true }
 
 # Random number generation
-rand = { workspace = true }
 
 # System information
-num_cpus = "1.16"
 
 # Regular expressions
 regex = { workspace = true }
 lazy_static = "1.4"
 
 # Base64 encoding for various use cases
-base64 = { workspace = true }
 
 # SHA-2 hashing for PKCE
-sha2 = "0.10"
 
 # Compression for responses
-flate2 = { workspace = true }
 
 # Content-Type detection
-infer = { workspace = true }
 
 # IP address handling and geolocation
-ipnet = { workspace = true }
 
 # Streaming and async utilities
-tokio-stream = { workspace = true, features = ["sync", "time", "net"] }
-tokio-util = { workspace = true, features = ["full"] }
-pin-project-lite = { workspace = true }
 
 # Development dependencies
 [dev-dependencies]
-tokio-test = { workspace = true }
-axum-test = { workspace = true }
-criterion = { workspace = true }
-tempfile = { workspace = true }
-serial_test = { workspace = true }
-mockall = { workspace = true }
-proptest = { workspace = true }
-fake = { workspace = true }
-env_logger = "0.11"
 
 # Test utilities for HTTP testing
-tower-test = "0.4"
 
 [package.metadata.docs.rs]
 all-features = true

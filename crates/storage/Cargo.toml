@@ -6,7 +6,6 @@ license.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
-documentation.workspace = true
 description = "Data persistence and caching layer for ORCHER task orchestration platform"
 keywords = ["storage", "database", "postgres", "redis", "repository"]
 categories = ["database", "caching", "asynchronous"]
@@ -19,7 +18,7 @@ required-features = ["postgres", "migrations"]
 [features]
 default = ["postgres", "migrations", "compression"]
 compression = ["dep:flate2"]
-postgres = ["dep:sqlx", "dep:deadpool-postgres", "orcher-common/postgres"]
+postgres = ["dep:sqlx", "orcher-common/postgres"]
 redis = ["dep:redis", "dep:deadpool-redis"]
 migrations = ["sqlx/migrate"]
 backup = ["dep:flate2"]
@@ -44,13 +43,12 @@ rmp-serde = { workspace = true }
 
 # Error handling
 thiserror = { workspace = true }
-anyhow = { workspace = true }
 
 # Time and identifiers
 chrono = { workspace = true }
 jiff = { workspace = true }
-uuid = { workspace = true }
-cron = { workspace = true }
+# v5: deterministic ids derived from a namespace and a name (repository.rs).
+uuid = { workspace = true, features = ["v5"] }
 
 # Cryptography for checksums
 sha2 = { workspace = true }
@@ -62,14 +60,12 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Database - PostgreSQL
 sqlx = { workspace = true, optional = true, features = ["chrono"] }
-deadpool-postgres = { workspace = true, optional = true }
 
 # Caching - Redis
 redis = { workspace = true, optional = true, features = ["tokio-comp", "streams", "cluster", "connection-manager"] }
 deadpool-redis = { workspace = true, optional = true }
 
 # Connection pooling utilities
-deadpool = { workspace = true }
 
 # Logging
 tracing = { workspace = true }
@@ -78,7 +74,6 @@ tracing = { workspace = true }
 url = { workspace = true }
 hex = { workspace = true }
 urlencoding = "2.1"
-rand = { workspace = true }
 
 
 
@@ -105,31 +100,12 @@ nix = { version = "0.27", features = ["fs"] }
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["fileapi"] }
 
-# Additional utilities
-log = "0.4"
-
-# Metrics and monitoring
-tokio-metrics = { workspace = true }
-
-# Lock-free data structures for caching
-dashmap = { workspace = true }
-
-# Stream processing
-tokio-stream = { workspace = true }
-tokio-util = { workspace = true }
-
-# Validation
-validator = { workspace = true }
-
 [dev-dependencies]
 orcher-common = { workspace = true, features = ["test-utils"] }
-tokio-test = { workspace = true }
 tempfile = { workspace = true }
-criterion = { workspace = true }
 serial_test = { workspace = true }
 testcontainers = { workspace = true }
 fake = { workspace = true }
-proptest = { workspace = true }
 
 # For integration tests
 tokio = { workspace = true, features = ["full", "test-util"] }

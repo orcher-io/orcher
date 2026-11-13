@@ -6,7 +6,6 @@ license.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
-documentation.workspace = true
 description = "Event infrastructure for the ORCHER orchestration platform"
 keywords = ["events", "orchestration", "pubsub", "event-sourcing", "workflow"]
 categories = ["asynchronous", "data-structures", "development-tools"]
@@ -45,12 +44,6 @@ orcher-storage = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
-tokio-test = { workspace = true }
-mockall = { workspace = true }
-proptest = { workspace = true }
-criterion = { workspace = true }
-tempfile = { workspace = true }
-tracing-subscriber = "0.3"
 serde = { workspace = true, features = ["derive"] }
 
 [features]

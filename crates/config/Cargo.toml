@@ -6,7 +6,6 @@ license.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
-documentation.workspace = true
 description = "Configuration type definitions for Orcher task orchestration platform"
 keywords = ["configuration", "config", "settings"]
 categories = ["config", "development-tools"]
@@ -22,7 +21,6 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["full"] }
 
 [package.metadata.docs.rs]
 all-features = true
