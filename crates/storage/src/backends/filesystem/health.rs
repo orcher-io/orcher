@@ -157,7 +157,10 @@ fn get_available_space(path: &Path) -> Option<u64> {
         // Get filesystem stats using statvfs
         match nix::sys::statvfs::statvfs(path) {
             Ok(stats) => {
-                let available = stats.blocks_available() * stats.block_size();
+                // The cast is needed: the block count is a u64 on Linux but a
+                // u32 on macOS, and the block size a u64 on both.
+                #[allow(clippy::unnecessary_cast)]
+                let available = stats.blocks_available() as u64 * stats.block_size();
                 Some(available)
             }
             Err(e) => {
