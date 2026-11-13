@@ -97,7 +97,6 @@ utoipa = { workspace = true, features = [
 
 # Time and date handling
 jiff = { workspace = true }
-humantime = { workspace = true }
 
 chrono = { workspace = true }
 # Unique identifiers
@@ -143,7 +142,6 @@ sqlx = { workspace = true, features = ["runtime-tokio-rustls", "postgres", "uuid
 
 # Security and TLS
 rustls-pemfile = { workspace = true }
-tokio-rustls = { workspace = true }
 
 
 # JSON schema validation

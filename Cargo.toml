@@ -43,7 +43,6 @@ chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.8"
 jiff = { version = "0.2", features = ["serde"] }
 cron = "0.12"
-humantime = "2.1"
 
 # Identifiers and utilities
 uuid = { version = "1.6", features = ["v4", "serde"] }
@@ -65,7 +64,6 @@ sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid"
 redis = { version = "0.32.7", features = ["tokio-comp", "streams", "cluster", "connection-manager"] }
 
 # Connection pooling
-deadpool = "0.10"
 deadpool-redis = "0.22"
 
 # Security and cryptography
@@ -100,7 +98,6 @@ utoipa = { version = "4.2", features = ["axum_extras", "uuid"] }
 serde_urlencoded = "0.7"
 
 # Additional server dependencies
-tokio-rustls = "0.25"
 ipnet = "2.9"
 pin-project-lite = "0.2"
 mime = "0.3"
