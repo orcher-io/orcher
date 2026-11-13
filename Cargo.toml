@@ -26,7 +26,6 @@ repository = "https://github.com/orcher-io/orcher"
 # Core async runtime - tokio first approach
 tokio = { version = "1.35", features = ["full"] }
 futures = "0.3"
-futures-util = "0.3"
 async-trait = "0.1"
 
 # Serialization and data handling
@@ -36,7 +35,6 @@ serde = { version = "1.0", features = ["derive"] }
 # is parsed twice before its workflow replays it.
 serde_json = { version = "1.0", features = ["float_roundtrip"] }
 rmp-serde = "1.1"
-base64 = "0.22"
 
 # Time and scheduling
 chrono = { version = "0.4", features = ["serde"] }
@@ -68,13 +66,11 @@ deadpool-redis = "0.22"
 
 # Security and cryptography
 jsonwebtoken = "9.2"
-rustls-pemfile = "2.0"
 hmac = "0.12"
 sha2 = "0.10"
 subtle = "2.6"
 
 # Configuration
-serde_yaml = "0.9"
 url = "2.4"
 dotenvy = "0.15"
 
@@ -83,7 +79,6 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 prometheus = "0.13"
 metrics = "0.24"
-tokio-metrics = "0.3"
 
 # Distributed tracing
 
@@ -95,21 +90,13 @@ dashmap = "5.5"
 
 # OpenAPI documentation
 utoipa = { version = "4.2", features = ["axum_extras", "uuid"] }
-serde_urlencoded = "0.7"
 
 # Additional server dependencies
-ipnet = "2.9"
-pin-project-lite = "0.2"
-mime = "0.3"
-mime_guess = "2.0"
-once_cell = "1.19"
 parking_lot = "0.12"
 bytes = "1.7"
 
 # Compression and streaming
 flate2 = "1.0"
-tokio-stream = { version = "0.1", features = ["sync"] }
-tokio-util = { version = "0.7" }
 
 # Distributed systems
 
@@ -131,33 +118,14 @@ path = "crates/storage"
 
 
 
-[workspace.dependencies.orcher-monitoring]
-path = "crates/monitoring"
-
 [workspace.dependencies.orcher-core]
 path = "crates/core"
-
-[workspace.dependencies.criterion]
-version = "0.5"
-features = ["html_reports"]
-
-[workspace.dependencies.tokio-test]
-version = "0.4"
 
 [workspace.dependencies.tempfile]
 version = "3.8"
 
 [workspace.dependencies.serial_test]
 version = "3.0"
-
-[workspace.dependencies.axum-test]
-version = "15"
-
-[workspace.dependencies.mockall]
-version = "0.12"
-
-[workspace.dependencies.proptest]
-version = "1.4"
 
 [workspace.dependencies.fake]
 version = "2.9"

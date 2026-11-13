@@ -44,12 +44,6 @@ orcher-storage = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
-tokio-test = { workspace = true }
-mockall = { workspace = true }
-proptest = { workspace = true }
-criterion = { workspace = true }
-tempfile = { workspace = true }
-tracing-subscriber = "0.3"
 serde = { workspace = true, features = ["derive"] }
 
 [features]

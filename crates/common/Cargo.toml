@@ -27,14 +27,11 @@ postgres = ["dep:sqlx"]
 [dependencies]
 # Core async runtime (tokio-first approach)
 tokio = { workspace = true, optional = true }
-futures = { workspace = true }
-futures-util = { workspace = true }
 async-trait.workspace = true
 
 # Serialization and data handling
 serde = { workspace = true }
 serde_json = { workspace = true }
-ciborium = "0.2"
 
 # Time and identifiers
 chrono = { workspace = true }
@@ -45,13 +42,9 @@ uuid = { workspace = true, optional = true, features = ["serde", "v4", "std"] }
 
 # Utilities
 rand = { workspace = true, optional = true }
-regex = { workspace = true }
-url = { workspace = true }
 tracing = { workspace = true, optional = true }
 
 # Tokio utilities
-tokio-stream = { workspace = true, features = ["sync"] }
-tokio-util = { workspace = true }
 
 # Database (optional, for sqlx trait implementations on identifier types)
 sqlx = { workspace = true, optional = true }
@@ -64,6 +57,3 @@ jiff = { workspace = true }
 
 
 [dev-dependencies]
-tokio-test = { workspace = true }
-tempfile = { workspace = true }
-criterion = { workspace = true, features = ["html_reports", "async_tokio"] }

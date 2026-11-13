@@ -73,7 +73,6 @@ tracing = { workspace = true }
 url = { workspace = true }
 hex = { workspace = true }
 urlencoding = "2.1"
-rand = { workspace = true }
 
 
 
@@ -100,31 +99,12 @@ nix = { version = "0.27", features = ["fs"] }
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["fileapi"] }
 
-# Additional utilities
-log = "0.4"
-
-# Metrics and monitoring
-tokio-metrics = { workspace = true }
-
-# Lock-free data structures for caching
-dashmap = { workspace = true }
-
-# Stream processing
-tokio-stream = { workspace = true }
-tokio-util = { workspace = true }
-
-# Validation
-validator = { workspace = true }
-
 [dev-dependencies]
 orcher-common = { workspace = true, features = ["test-utils"] }
-tokio-test = { workspace = true }
 tempfile = { workspace = true }
-criterion = { workspace = true }
 serial_test = { workspace = true }
 testcontainers = { workspace = true }
 fake = { workspace = true }
-proptest = { workspace = true }
 
 # For integration tests
 tokio = { workspace = true, features = ["full", "test-util"] }
