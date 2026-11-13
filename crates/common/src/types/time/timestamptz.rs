@@ -252,6 +252,15 @@ mod pg {
         Timestamp::from_second(946_684_800).expect("valid pg epoch")
     }
 
+    /// `ts` as PostgreSQL stores it: whole microseconds since its epoch, any
+    /// nanoseconds below that dropped. Integer arithmetic, so a time already
+    /// in whole microseconds, such as one read back from the database, is
+    /// written back unchanged; a floating-point total put some of them a
+    /// microsecond early.
+    pub(super) fn pg_microseconds(ts: &Timestamptz) -> i64 {
+        ts.0.as_microsecond() - pg_epoch().as_microsecond()
+    }
+
     impl Type<sqlx::Postgres> for Timestamptz {
         fn type_info() -> PgTypeInfo {
             PgTypeInfo::with_oid(Oid(1184))
@@ -270,9 +279,7 @@ mod pg {
 
     impl Encode<'_, sqlx::Postgres> for Timestamptz {
         fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
-            let span = self.0.since(pg_epoch())?;
-            let micros = span.total(jiff::Unit::Microsecond)? as i64;
-            Encode::<sqlx::Postgres>::encode(micros, buf)
+            Encode::<sqlx::Postgres>::encode(pg_microseconds(self), buf)
         }
 
         fn size_hint(&self) -> usize {
@@ -396,5 +403,34 @@ mod tests {
     fn test_default_is_epoch() {
         let ts = Timestamptz::default();
         assert_eq!(ts.timestamp(), 0);
+    }
+}
+
+#[cfg(all(test, feature = "postgres"))]
+mod pg_tests {
+    use super::*;
+
+    /// A time in whole microseconds is written as exactly those microseconds,
+    /// so a value read from the database and saved again does not move. A
+    /// floating-point conversion put about one in thirty-two of them a
+    /// microsecond early.
+    #[test]
+    fn whole_microseconds_are_written_unchanged() {
+        const PG_EPOCH_MICROS: i64 = 946_684_800_000_000;
+        let start = Timestamptz::now().timestamp_micros();
+        for micros in start..start + 100_000 {
+            let ts = Timestamptz::from_microsecond(micros).unwrap();
+            assert_eq!(pg::pg_microseconds(&ts), micros - PG_EPOCH_MICROS, "{ts:?}");
+        }
+    }
+
+    /// Nanoseconds below a microsecond are dropped, as before.
+    #[test]
+    fn nanoseconds_below_a_microsecond_are_dropped() {
+        let ts = Timestamptz::from_jiff(jiff::Timestamp::new(1_763_000_000, 123_456_999).unwrap());
+        assert_eq!(
+            pg::pg_microseconds(&ts),
+            (1_763_000_000 - 946_684_800) * 1_000_000 + 123_456
+        );
     }
 }
