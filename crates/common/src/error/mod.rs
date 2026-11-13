@@ -15,7 +15,8 @@ pub enum OrcherError {
     },
     Timeout {
         operation: String,
-        timeout_secs: u64,
+        /// How long the operation was given, in milliseconds.
+        timeout_ms: u64,
     },
     Internal {
         message: String,
@@ -83,12 +84,13 @@ impl fmt::Display for OrcherError {
             }
             OrcherError::Timeout {
                 operation,
-                timeout_secs,
+                timeout_ms,
             } => {
                 write!(
                     f,
-                    "Operation '{}' timed out after {} seconds",
-                    operation, timeout_secs
+                    "Operation '{}' timed out after {:?}",
+                    operation,
+                    std::time::Duration::from_millis(*timeout_ms)
                 )
             }
             OrcherError::Internal { message, .. } => {
@@ -206,10 +208,11 @@ impl OrcherError {
         }
     }
 
-    pub fn timeout(operation: impl Into<String>, timeout_secs: u64) -> Self {
+    /// `operation` did not finish within `after`.
+    pub fn timeout(operation: impl Into<String>, after: std::time::Duration) -> Self {
         Self::Timeout {
             operation: operation.into(),
-            timeout_secs,
+            timeout_ms: u64::try_from(after.as_millis()).unwrap_or(u64::MAX),
         }
     }
 
@@ -340,8 +343,8 @@ macro_rules! orcher_error {
     (not_found, $type:expr, $id:expr) => {
         $crate::error::OrcherError::not_found($type, $id)
     };
-    (timeout, $op:expr, $secs:expr) => {
-        $crate::error::OrcherError::timeout($op, $secs)
+    (timeout, $op:expr, $after:expr) => {
+        $crate::error::OrcherError::timeout($op, $after)
     };
     (internal, $msg:expr) => {
         $crate::error::OrcherError::internal($msg)
@@ -378,10 +381,21 @@ mod tests {
 
     #[test]
     fn test_retryable() {
-        assert!(OrcherError::timeout("test", 30).is_retryable());
+        assert!(OrcherError::timeout("test", std::time::Duration::from_secs(30)).is_retryable());
         assert!(OrcherError::internal("test").is_retryable());
         assert!(!OrcherError::invalid_input("test").is_retryable());
         assert!(!OrcherError::authentication("test").is_retryable());
+    }
+
+    /// A timeout says how long the operation was given, to the millisecond.
+    #[test]
+    fn a_timeout_says_how_long_it_waited() {
+        let error =
+            OrcherError::timeout("claim an execution", std::time::Duration::from_millis(2500));
+        assert_eq!(
+            error.to_string(),
+            "Operation 'claim an execution' timed out after 2.5s"
+        );
     }
 
     #[test]

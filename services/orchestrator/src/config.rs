@@ -245,10 +245,10 @@ pub struct PollingConfig {
     #[serde(default = "default_claim_timeout_secs")]
     pub claim_timeout_secs: u64,
 
-    /// Claim query timeout in milliseconds (how long to wait for the claim query to execute)
-    /// This is NOT the claim lease duration - it's how long we wait for PostgreSQL to respond.
-    /// Increased from 200ms to handle PostgreSQL latency under load.
-    /// Default: 2000 (2 seconds)
+    /// How long a poll waits for its claim query, in milliseconds: not the
+    /// claim's lease, but how long PostgreSQL has to answer. A poll whose
+    /// claim takes longer fails as UNAVAILABLE and the worker polls again.
+    /// Default: 2000. `ORCHER_CLAIM_QUERY_TIMEOUT_MS` overrides it.
     #[serde(default = "default_claim_query_timeout_ms")]
     pub claim_query_timeout_ms: u64,
 
@@ -348,9 +348,7 @@ fn default_claim_timeout_secs() -> u64 {
 }
 
 fn default_claim_query_timeout_ms() -> u64 {
-    // Query timeout for PostgreSQL claim query execution
-    // Increased from 200ms to handle PostgreSQL latency under load
-    2000 // 2 seconds
+    2000
 }
 
 fn default_poll_timeout_secs() -> u64 {

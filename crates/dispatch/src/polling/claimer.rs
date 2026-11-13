@@ -169,7 +169,7 @@ impl Claimer {
 
         // Add explicit timeout wrapper to diagnose hanging queries
         // Uses configurable timeout (default 2000ms) to handle PostgreSQL latency under load
-        let claim_timeout = Duration::from_millis(self.claim_query_timeout_ms);
+        let claim_timeout = self.claim_query_timeout();
 
         debug!(
             task_queue = %task_queue,
@@ -230,11 +230,8 @@ impl Claimer {
                     "Claim query timed out (likely query hanging or DB under heavy load)"
                 );
                 return Err(OrcherError::timeout(
-                    format!(
-                        "Claim query timed out after {}ms",
-                        self.claim_query_timeout_ms
-                    ),
-                    0,
+                    "claim an execution",
+                    self.claim_query_timeout(),
                 ));
             }
         };
@@ -289,8 +286,7 @@ impl Claimer {
             "Attempting fast claim by execution_id"
         );
 
-        // Fast claim with timeout for indexed lookup (increased to handle DB latency)
-        let claim_timeout = Duration::from_millis(2000);
+        let claim_timeout = self.claim_query_timeout();
 
         let claim_result = self
             .bounded(identity, claim_timeout, {
@@ -329,12 +325,12 @@ impl Claimer {
             Err(_) => {
                 warn!(
                     execution_id = %execution_id,
-                    timeout_ms = 2000,
+                    timeout_ms = self.claim_query_timeout_ms,
                     "Fast claim by execution_id timed out"
                 );
                 return Err(OrcherError::timeout(
-                    "Fast claim by execution_id timed out",
-                    0,
+                    "claim an execution by id",
+                    self.claim_query_timeout(),
                 ));
             }
         };
@@ -425,6 +421,11 @@ impl Claimer {
         self.claim_query_timeout_ms
     }
 
+    /// How long a claim query is waited for before the poll gives up on it.
+    pub fn claim_query_timeout(&self) -> Duration {
+        Duration::from_millis(self.claim_query_timeout_ms)
+    }
+
     /// Claims up to `limit` executions in a single DB round-trip.
     #[allow(clippy::too_many_arguments)]
     pub async fn claim_batch(
@@ -449,7 +450,7 @@ impl Claimer {
         );
 
         // Add explicit timeout wrapper to handle slow queries under load
-        let claim_timeout = Duration::from_millis(self.claim_query_timeout_ms);
+        let claim_timeout = self.claim_query_timeout();
 
         debug!(
             task_queue = %task_queue,
@@ -512,11 +513,8 @@ impl Claimer {
                     "Batch claim query timed out (likely query hanging or DB under heavy load)"
                 );
                 return Err(OrcherError::timeout(
-                    format!(
-                        "Batch claim query timed out after {}ms",
-                        self.claim_query_timeout_ms
-                    ),
-                    0,
+                    "claim a batch of executions",
+                    self.claim_query_timeout(),
                 ));
             }
         };
@@ -568,7 +566,7 @@ impl Claimer {
         );
 
         // Add explicit timeout wrapper to handle slow queries under load
-        let claim_timeout = Duration::from_millis(self.claim_query_timeout_ms);
+        let claim_timeout = self.claim_query_timeout();
 
         debug!(
             task_queue = %task_queue,
@@ -635,11 +633,8 @@ impl Claimer {
                     "Batch claim with offset query timed out"
                 );
                 return Err(OrcherError::timeout(
-                    format!(
-                        "Batch claim with offset query timed out after {}ms",
-                        self.claim_query_timeout_ms
-                    ),
-                    0,
+                    "claim a batch of executions from an offset",
+                    self.claim_query_timeout(),
                 ));
             }
         };
