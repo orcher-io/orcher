@@ -124,6 +124,8 @@ async fn create_test_workflow(
         history_lineage: None,
         activated_without_scheme: false,
         step_results_journaled: true,
+        claimed_through_entry: None,
+        observed_through_entry: None,
     };
 
     repo.create(&workflow)

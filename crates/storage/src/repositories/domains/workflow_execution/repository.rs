@@ -319,6 +319,10 @@ struct WorkflowExecutionRow {
     activated_without_scheme: bool,
     #[sqlx(default)]
     step_results_journaled: bool,
+    #[sqlx(default)]
+    claimed_through_entry: Option<i64>,
+    #[sqlx(default)]
+    observed_through_entry: Option<i64>,
 }
 
 impl From<WorkflowExecutionRow> for WorkflowExecution {
@@ -394,6 +398,8 @@ impl From<WorkflowExecutionRow> for WorkflowExecution {
             history_lineage: row.history_lineage,
             activated_without_scheme: row.activated_without_scheme,
             step_results_journaled: row.step_results_journaled,
+            claimed_through_entry: row.claimed_through_entry,
+            observed_through_entry: row.observed_through_entry,
         }
     }
 }
@@ -831,6 +837,14 @@ impl ActivationFence {
             )
             UPDATE workflow_executions we
             SET completed_activation = GREATEST(COALESCE(we.completed_activation, 0), $2),
+                -- The run has observed everything its applied activation
+                -- read, but only the current claim's position is that
+                -- activation's: one recorded after a newer claim keeps what
+                -- was known before.
+                observed_through_entry = CASE
+                    WHEN we.activation_seq = $2 THEN we.claimed_through_entry
+                    ELSE we.observed_through_entry
+                END,
                 claimed_by = CASE WHEN before.pending_requeue THEN NULL ELSE we.claimed_by END,
                 claimed_at = CASE WHEN before.pending_requeue THEN NULL ELSE we.claimed_at END,
                 claim_timeout_at =
@@ -3973,6 +3987,13 @@ impl WorkflowExecutionRepository {
                 claimed_by_instance = $11,
                 -- Claimed: whoever holds it now, it is held for nobody.
                 preferred_until = NULL,
+                -- Where in its journal this activation reads to: its last
+                -- entry now. An outcome recorded after the claim finds the
+                -- activation in flight, so its wake-up is deferred to the
+                -- next one, which carries it (V087).
+                claimed_through_entry = (
+                    SELECT MAX(j.event_id) FROM workflow_execution_journal j
+                    WHERE j.execution_id = we.execution_id),
                 -- Bind on first claim and never rebind. COALESCE keeps the
                 -- original value once set, so a later claim by a different
                 -- release cannot move an in-flight execution onto new code —
@@ -5010,6 +5031,13 @@ impl WorkflowExecutionRepository {
                 -- recorded as it is handed over (hand_to).
                 claimed_by_instance = NULL,
                 preferred_until = NULL,
+                -- Where in its journal this activation reads to: its last
+                -- entry now. An outcome recorded after the claim finds the
+                -- activation in flight, so its wake-up is deferred to the
+                -- next one, which carries it (V087).
+                claimed_through_entry = (
+                    SELECT MAX(j.event_id) FROM workflow_execution_journal j
+                    WHERE j.execution_id = we.execution_id),
                 -- Bind on first claim, never rebind. Also missing here before, so
                 -- anything claimed in a batch was never bound at all.
                 bound_version_id = COALESCE(we.bound_version_id, $7),
@@ -5224,6 +5252,13 @@ impl WorkflowExecutionRepository {
                 claimed_on_node = $5,
                 claimed_by_instance = $7,
                 preferred_until = NULL,
+                -- Where in its journal this activation reads to: its last
+                -- entry now. An outcome recorded after the claim finds the
+                -- activation in flight, so its wake-up is deferred to the
+                -- next one, which carries it (V087).
+                claimed_through_entry = (
+                    SELECT MAX(j.event_id) FROM workflow_execution_journal j
+                    WHERE j.execution_id = workflow_executions.execution_id),
                 bound_version_id = COALESCE(bound_version_id, $4),
                 {bind_step_ids},
                 -- A new activation, numbered as every claim numbers it.

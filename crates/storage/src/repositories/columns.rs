@@ -32,7 +32,8 @@ macro_rules! workflow_executions {
             "retries_settled_at, activation_seq, completed_activation, claimed_on_node, ",
             "holds_workflow_id, claimed_by_instance, run_timeout_secs, task_timeout_secs, ",
             "execution_deadline, annotations, start_request_id, start_after, awaiting_start, ",
-            "step_id_scheme, history_lineage, activated_without_scheme, step_results_journaled",
+            "step_id_scheme, history_lineage, activated_without_scheme, step_results_journaled, ",
+            "claimed_through_entry, observed_through_entry",
         )
     };
     ($p:literal) => {
@@ -182,7 +183,11 @@ macro_rules! workflow_executions {
             $p,
             ".activated_without_scheme, ",
             $p,
-            ".step_results_journaled",
+            ".step_results_journaled, ",
+            $p,
+            ".claimed_through_entry, ",
+            $p,
+            ".observed_through_entry",
         )
     };
 }

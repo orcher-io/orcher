@@ -177,9 +177,14 @@ impl Converter {
             entries
         };
 
-        // Convert journal entries to polling format
+        // The activation carries the journal up to where its claim found it
+        // (V087), so it reads exactly what the position it reports says. An
+        // entry recorded since found the activation in flight, and its
+        // wake-up is deferred to the next one, which carries it.
+        let through = execution.claimed_through_entry;
         let journal: Vec<JournalEntry> = db_journal
             .into_iter()
+            .filter(|entry| through.is_none_or(|through| entry.event_id <= through))
             .map(|entry| JournalEntry {
                 event_id: entry.event_id,
                 timestamp: entry.timestamp,
@@ -196,9 +201,13 @@ impl Converter {
             .map(|e| e.event_id)
             .unwrap_or(1);
 
-        // For resumed executions, previous_started_event_id would be set
-        // For now, we'll use None (first execution)
-        let previous_started_event_id = None;
+        // Where the run's last applied activation read to: the run observed
+        // every outcome up to that entry before. Known only for a run whose
+        // step results are journal entries; one whose results are rebuilt
+        // from its execution log is sent none.
+        let previous_started_event_id = execution
+            .observed_through_entry
+            .filter(|_| execution.step_results_journaled);
 
         // Build response
         let response = PollExecutionResponse {
