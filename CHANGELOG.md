@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.7.1](https://github.com/orcher-io/orcher/compare/v0.7.0...v0.7.1) (2026-11-13)
+
+
+### Features
+
+* **rest:** what the dashboard needs: reset, a status that names its namespace, an honest 401 ([f9991db](https://github.com/orcher-io/orcher/commit/f9991db7bb32b28875fa993dbee5a68e913b821a))
+* **rest:** what the dashboard needs: reset, a status that names its namespace, an honest 401 ([509b3d7](https://github.com/orcher-io/orcher/commit/509b3d7541e776770525a44e99ac4323cbfe90fb))
+
+
+### Bug Fixes
+
+* **storage:** build on macOS again ([a83bec4](https://github.com/orcher-io/orcher/commit/a83bec45140e27ffd594943c33a6c40200018e18))
+* **storage:** build on macOS again ([2d1613a](https://github.com/orcher-io/orcher/commit/2d1613afd923f0866d07e25b2fe7a5de93af1e08))
+* **storage:** enable the uuid feature it uses instead of getting it from a removed dependency ([46b6380](https://github.com/orcher-io/orcher/commit/46b638094c763835d5c87bbcb021714ec2797288))
+
+
+### Documentation
+
+* a README in the family's design, with an engine banner ([127322a](https://github.com/orcher-io/orcher/commit/127322aeb05748edd0b80a458ba34218ac203fd3))
+* a README in the family's design, with an engine banner ([33b46f4](https://github.com/orcher-io/orcher/commit/33b46f455854bd63abd746c48cd8bbbb886c5d2f))
+* draw the architecture as an image that follows the theme ([386dafd](https://github.com/orcher-io/orcher/commit/386dafd5719f07acfc2cb72a1e5f3a9d3af185db))
+* thinner lines in the architecture diagram ([797c43d](https://github.com/orcher-io/orcher/commit/797c43d4b769e46b6ac3752982e4dfeee3134677))
+
 ## 0.7.0 (2026-11-09)
 
 
