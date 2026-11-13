@@ -84,6 +84,7 @@ impl Default for SecurityHeaders {
 ///
 /// Construct with [`Default::default`] for sensible defaults, or
 /// [`DefaultSecurityPolicy::new`] to customise the header values.
+#[derive(Default)]
 pub struct DefaultSecurityPolicy {
     headers: SecurityHeaders,
 }
@@ -93,14 +94,6 @@ impl DefaultSecurityPolicy {
     #[must_use]
     pub fn new(headers: SecurityHeaders) -> Self {
         Self { headers }
-    }
-}
-
-impl Default for DefaultSecurityPolicy {
-    fn default() -> Self {
-        Self {
-            headers: SecurityHeaders::default(),
-        }
     }
 }
 

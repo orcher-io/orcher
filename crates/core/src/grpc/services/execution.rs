@@ -203,6 +203,8 @@ pub struct ExecutionService {
 pub const DEFAULT_HEARTBEAT_TIMEOUT_SECS: i32 = 60;
 
 /// What admitting a workflow completion decided.
+// Returned once and matched at once, so the size of `Apply` costs nothing.
+#[allow(clippy::large_enum_variant)]
 enum Admission {
     /// Apply it. `fence` holds the execution's other completions off until it
     /// has been applied; `activation` is what to record as applied then.
@@ -409,7 +411,6 @@ fn older_worker_cancellation() -> orcher_proto::orcher::v1::Command {
                 },
             ),
         ),
-        ..Default::default()
     }
 }
 
@@ -6600,7 +6601,7 @@ mod tests {
         );
 
         // Verify the actual value is null
-        assert!(null_result.unwrap().is_null());
+        assert_eq!(null_result, Some(serde_json::Value::Null));
     }
 
     /// Test that missing results (None) are filtered out

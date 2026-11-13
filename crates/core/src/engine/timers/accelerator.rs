@@ -639,8 +639,10 @@ mod tests {
 
     #[test]
     fn test_should_poll_db() {
-        let mut config = AcceleratorConfig::default();
-        config.db_poll_interval = Duration::from_millis(50);
+        let config = AcceleratorConfig {
+            db_poll_interval: Duration::from_millis(50),
+            ..Default::default()
+        };
         let accelerator = TimerAccelerator::new(config);
 
         // Initially should not poll (just created)

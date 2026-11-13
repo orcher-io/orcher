@@ -44,7 +44,7 @@ use orcher_proto::orcher::v1::{
 };
 use serde_json::Value as JsonValue;
 use std::time::Duration;
-use tonic::transport::{Channel, Endpoint};
+use tonic::transport::Endpoint;
 use tracing::{debug, error, info, warn};
 
 /// Default connection timeout for gRPC client
@@ -63,12 +63,7 @@ const DEFAULT_POLL_TIMEOUT: Duration = Duration::from_secs(30);
 #[derive(Clone)]
 pub struct ExecutionServiceClient {
     /// Inner gRPC client
-    client: ProtoExecutionServiceClient<
-        tonic::service::interceptor::InterceptedService<
-            Channel,
-            fn(tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status>,
-        >,
-    >,
+    client: ProtoExecutionServiceClient<super::AuthenticatedChannel>,
     /// Server endpoint URL
     endpoint: String,
 }

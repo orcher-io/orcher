@@ -76,7 +76,7 @@ impl TaskRetryDispatcher {
                 if let Err(e) = self.dispatch_ready().await {
                     warn!(error = %e, "Task retry sweep failed");
                 }
-                if ticks % UNDISPATCHED_SWEEP_EVERY == 0 {
+                if ticks.is_multiple_of(UNDISPATCHED_SWEEP_EVERY) {
                     if let Err(e) = self.dispatch_undispatched().await {
                         warn!(error = %e, "Undispatched task sweep failed");
                     }

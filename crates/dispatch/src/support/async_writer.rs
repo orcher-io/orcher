@@ -446,7 +446,7 @@ impl<J: JournalWriter + 'static> WriterLoop<J> {
         }
 
         let start = Instant::now();
-        let ops: Vec<_> = self.buffer.drain(..).collect();
+        let ops: Vec<_> = std::mem::take(&mut self.buffer);
 
         // Group journal entries by workflow for efficient batch writes
         let mut journal_batches: HashMap<(String, String), Vec<JournalEntry>> = HashMap::new();

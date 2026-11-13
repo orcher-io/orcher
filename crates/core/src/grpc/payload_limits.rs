@@ -157,13 +157,13 @@ pub fn activation_too_large(what: &str, size: usize, receive_limit: usize, legac
 pub fn format_bytes(bytes: usize) -> String {
     const KIB: usize = 1024;
     if bytes >= MIB {
-        if bytes % MIB == 0 {
+        if bytes.is_multiple_of(MIB) {
             format!("{} MiB", bytes / MIB)
         } else {
             format!("{:.1} MiB", bytes as f64 / MIB as f64)
         }
     } else if bytes >= KIB {
-        if bytes % KIB == 0 {
+        if bytes.is_multiple_of(KIB) {
             format!("{} KiB", bytes / KIB)
         } else {
             format!("{:.1} KiB", bytes as f64 / KIB as f64)

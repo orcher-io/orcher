@@ -338,7 +338,6 @@ async fn an_eager_task_running_past_its_ttl_is_not_run_again() {
             namespace: NAMESPACE.to_string(),
             identity: WORKER.to_string(),
             result: b"\"done\"".to_vec(),
-            ..Default::default()
         }))
         .await
         .expect("complete the task");

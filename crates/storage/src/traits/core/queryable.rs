@@ -111,11 +111,7 @@ impl QueryPagination {
 
     /// Get the page number (0-based)
     pub fn page_number(&self) -> u64 {
-        if self.limit == 0 {
-            0
-        } else {
-            self.offset / self.limit
-        }
+        self.offset.checked_div(self.limit).unwrap_or(0)
     }
 }
 

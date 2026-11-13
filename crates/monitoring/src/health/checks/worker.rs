@@ -321,8 +321,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_worker_pool_health_check_high_utilization() {
-        let mut config = WorkerPoolHealthCheckConfig::default();
-        config.max_utilization_threshold = 0.5; // 50% max
+        let config = WorkerPoolHealthCheckConfig {
+            max_utilization_threshold: 0.5, // 50% max
+            ..Default::default()
+        };
 
         let check = WorkerPoolHealthCheck::with_config("test_workers", config);
         check.set_worker_status(10, 8, 2); // 80% utilization

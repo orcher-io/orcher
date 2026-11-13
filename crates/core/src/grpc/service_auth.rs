@@ -99,9 +99,9 @@ pub struct ServicePermissions {
     pub can_act_for_any_organization: bool,
 }
 
-impl ServicePermissions {
+impl Default for ServicePermissions {
     /// Full permissions (a trusted client that can drive workflows).
-    pub fn default() -> Self {
+    fn default() -> Self {
         Self {
             can_poll_workflow_steps: true,
             can_poll_activity_tasks: true,
@@ -114,7 +114,9 @@ impl ServicePermissions {
             can_act_for_any_organization: false,
         }
     }
+}
 
+impl ServicePermissions {
     /// Worker permissions: may poll/execute work but not control workflows.
     pub fn worker() -> Self {
         Self {

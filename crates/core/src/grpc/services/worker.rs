@@ -663,7 +663,6 @@ mod tests {
                 orcher_proto::orcher::v1::DeregisterWorkerRequest {
                     service_id: service_id.clone(),
                     registration_id: registered.registration_id,
-                    ..Default::default()
                 },
             ))
             .await

@@ -59,6 +59,27 @@ pub fn track_consumer_operation(_success: bool) {
     counter!("orcher_queue_consumer_operations_total").increment(1);
 }
 
+pub fn track_queue_message_published(queue_name: &str, status: &str) {
+    counter!(super::names::queue::MESSAGES_PUBLISHED_TOTAL, "queue" => queue_name.to_string(), "status" => status.to_string()).increment(1);
+}
+
+pub fn track_queue_message_consumed(queue_name: &str, status: &str) {
+    counter!(super::names::queue::MESSAGES_CONSUMED_TOTAL, "queue" => queue_name.to_string(), "status" => status.to_string()).increment(1);
+}
+
+pub fn track_queue_publish_error(queue_name: &str, error_type: &str) {
+    counter!(super::names::queue::PUBLISH_ERRORS_TOTAL, "queue" => queue_name.to_string(), "error_type" => error_type.to_string()).increment(1);
+}
+
+pub fn track_queue_consume_error(queue_name: &str, error_type: &str) {
+    counter!(super::names::queue::CONSUME_ERRORS_TOTAL, "queue" => queue_name.to_string(), "error_type" => error_type.to_string()).increment(1);
+}
+
+pub fn record_queue_publish_latency(queue_name: &str, duration: std::time::Duration) {
+    histogram!(super::names::queue::PUBLISH_LATENCY_SECONDS, "queue" => queue_name.to_string())
+        .record(duration.as_secs_f64());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -119,25 +140,4 @@ mod tests {
         track_queue_consume_error("test-queue", "parse_error");
         record_queue_publish_latency("test-queue", Duration::from_millis(10));
     }
-}
-
-pub fn track_queue_message_published(queue_name: &str, status: &str) {
-    counter!(super::names::queue::MESSAGES_PUBLISHED_TOTAL, "queue" => queue_name.to_string(), "status" => status.to_string()).increment(1);
-}
-
-pub fn track_queue_message_consumed(queue_name: &str, status: &str) {
-    counter!(super::names::queue::MESSAGES_CONSUMED_TOTAL, "queue" => queue_name.to_string(), "status" => status.to_string()).increment(1);
-}
-
-pub fn track_queue_publish_error(queue_name: &str, error_type: &str) {
-    counter!(super::names::queue::PUBLISH_ERRORS_TOTAL, "queue" => queue_name.to_string(), "error_type" => error_type.to_string()).increment(1);
-}
-
-pub fn track_queue_consume_error(queue_name: &str, error_type: &str) {
-    counter!(super::names::queue::CONSUME_ERRORS_TOTAL, "queue" => queue_name.to_string(), "error_type" => error_type.to_string()).increment(1);
-}
-
-pub fn record_queue_publish_latency(queue_name: &str, duration: std::time::Duration) {
-    histogram!(super::names::queue::PUBLISH_LATENCY_SECONDS, "queue" => queue_name.to_string())
-        .record(duration.as_secs_f64());
 }

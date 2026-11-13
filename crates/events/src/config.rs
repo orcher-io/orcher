@@ -122,7 +122,7 @@ mod tests {
     fn test_default_config() {
         let config = EventSystemConfig::default();
         assert_eq!(config.bus.task_channel_capacity, 10_000);
-        assert_eq!(config.publisher.enable_persistence, true);
+        assert!(config.publisher.enable_persistence);
     }
 
     #[test]
@@ -141,7 +141,7 @@ mod tests {
             .with_persistence(false)
             .with_queue_size(5_000);
 
-        assert_eq!(config.enable_persistence, false);
+        assert!(!config.enable_persistence);
         assert_eq!(config.persistence_queue_size, 5_000);
     }
 }

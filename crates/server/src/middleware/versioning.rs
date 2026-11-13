@@ -85,6 +85,8 @@ impl VersioningMiddleware {
     }
 
     /// Process request with versioning
+    // axum middleware: the error is the response sent instead of calling `next`.
+    #[allow(clippy::result_large_err)]
     pub async fn process(&self, mut request: Request, next: Next) -> Result<Response, Response> {
         // Detect API version from request
         let version = match self.detect_version(&request) {
@@ -259,6 +261,8 @@ impl VersioningMiddleware {
 }
 
 /// Axum middleware function for versioning
+// axum middleware: the error is the response sent instead of calling `next`.
+#[allow(clippy::result_large_err)]
 pub async fn versioning_middleware(request: Request, next: Next) -> Result<Response, Response> {
     let middleware = VersioningMiddleware::new(VersioningConfig::default());
     middleware.process(request, next).await

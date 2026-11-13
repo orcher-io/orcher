@@ -158,7 +158,7 @@ mod tests {
         let event = SchedulerEvent::ScheduleCreated {
             schedule_id: schedule_id.clone(),
             cron: "0 0 * * *".to_string(),
-            workflow_id: workflow_id.clone(),
+            workflow_id,
             created_at,
         };
 
@@ -307,7 +307,7 @@ mod tests {
             SchedulerEvent::ScheduleCreated {
                 schedule_id: schedule_id.clone(),
                 cron: "0 0 * * *".to_string(),
-                workflow_id: workflow_id.clone(),
+                workflow_id,
                 created_at: now,
             },
             SchedulerEvent::ScheduleUpdated {

@@ -22,6 +22,9 @@
 //! cargo test -p orcher-core --test start_timeouts -- --ignored --test-threads=1
 //! ```
 
+// Helpers return `tonic::Status`, the error the engine's gRPC services answer with.
+#![allow(clippy::result_large_err)]
+
 use std::sync::Arc;
 use std::time::Duration;
 

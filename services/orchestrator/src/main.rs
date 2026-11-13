@@ -1229,10 +1229,10 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
     // Resolver retained for components built/started earlier than this block (the
     // timeout watcher and retry schedulers). They hold an `Arc<OnceLock>`, so setting it
     // here still reaches their already-spawned loops. `None` ⇒ unpartitioned.
+
     let shard_resolver: Option<
         std::sync::Arc<dyn orcher_storage::sharding::pool_routing::ShardPoolResolver>,
-    >;
-    if !shard_pools.is_empty() {
+    > = if !shard_pools.is_empty() {
         let mut pools: Vec<sqlx::PgPool> = Vec::with_capacity(shard_pools.len() + 1);
         pools.push(pool.clone());
         for sp in &shard_pools {
@@ -1264,9 +1264,9 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
             shard_db_count = shard_pools.len() + 1,
             "partitioned persistence enabled: shard writes routed across databases"
         );
-        shard_resolver = Some(
+        Some(
             router as std::sync::Arc<dyn orcher_storage::sharding::pool_routing::ShardPoolResolver>,
-        );
+        )
     } else {
         // Single pool. The router is a no-op for *pool selection* — every shard
         // resolves to the one pool — but the repositories still need it, because
@@ -1288,10 +1288,10 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
         if let Some((ref timeout_watcher, _)) = timeout_watcher_handle {
             timeout_watcher.set_shard_resolver(router.clone());
         }
-        shard_resolver = Some(
+        Some(
             router as std::sync::Arc<dyn orcher_storage::sharding::pool_routing::ShardPoolResolver>,
-        );
-    }
+        )
+    };
 
     // Enable shard-ownership fencing on the coordinator's write path when clustering
     // is on (the ShardOwnership built above). Off → writes are unguarded.
@@ -2389,122 +2389,6 @@ fn server_exit_error(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A pool that is never connected: the OIDC branch of the guard decides
-    /// before it reads anything.
-    fn unconnected_pool() -> sqlx::PgPool {
-        sqlx::postgres::PgPoolOptions::new()
-            .connect_lazy("postgresql://nobody@127.0.0.1:1/none")
-            .expect("a lazy pool")
-    }
-
-    fn oidc(organization_claim: Option<&str>) -> orcher_core::auth::OidcConfig {
-        serde_json::from_value(serde_json::json!({
-            "issuer": "https://idp.example.com",
-            "audience": "orcher",
-            "organization_claim": organization_claim,
-        }))
-        .expect("an OIDC configuration")
-    }
-
-    #[tokio::test]
-    async fn tokens_that_name_organizations_need_a_declared_tenancy() {
-        let mut security = config::OrchestratorConfig::default().security;
-        security.auth_mode = orcher_core::grpc::auth_layer::AuthMode::Oidc;
-        security.oidc = Some(oidc(Some("org_id")));
-        let refused = refuse_undeclared_tenants(&unconnected_pool(), &security)
-            .await
-            .unwrap_err()
-            .to_string();
-        assert!(refused.contains("security.tenancy"), "{refused}");
-
-        // Tokens that name no organization: a single tenant, and no key is
-        // read in OIDC mode.
-        security.oidc = Some(oidc(None));
-        refuse_undeclared_tenants(&unconnected_pool(), &security)
-            .await
-            .expect("single-tenant tokens start");
-    }
-
-    #[test]
-    fn test_cli_parsing() {
-        let cli = Cli::parse_from(&["orchestrator", "--log-level", "debug"]);
-        assert_eq!(cli.log_level, "debug");
-        assert_eq!(cli.log_format, "compact");
-    }
-
-    #[test]
-    fn test_default_config() {
-        let config = config::OrchestratorConfig::default();
-        assert!(config.validate().is_ok());
-    }
-
-    #[test]
-    fn the_environment_wins_over_the_file_and_the_bind_address() {
-        assert_eq!(
-            advertise_address(
-                Some("10.0.0.7:50051".into()),
-                Some("10.0.0.8:50051"),
-                "10.0.0.9:50051"
-            )
-            .as_deref(),
-            Some("10.0.0.7:50051")
-        );
-        assert_eq!(
-            advertise_address(None, Some("10.0.0.8:50051"), "0.0.0.0:50051").as_deref(),
-            Some("10.0.0.8:50051")
-        );
-    }
-
-    #[test]
-    fn a_concrete_bind_address_is_advertised_and_a_wildcard_or_loopback_is_not() {
-        assert_eq!(
-            advertise_address(None, None, "10.0.0.9:50051").as_deref(),
-            Some("10.0.0.9:50051")
-        );
-        assert_eq!(advertise_address(None, None, "0.0.0.0:50051"), None);
-        assert_eq!(
-            advertise_address(Some("  ".into()), None, "[::]:50051"),
-            None
-        );
-        assert_eq!(
-            advertise_address(None, None, "127.0.0.1:50151"),
-            None,
-            "a loopback bind address means this machine only"
-        );
-        assert_eq!(advertise_address(None, None, "[::1]:50051"), None);
-    }
-
-    #[test]
-    fn an_explicit_loopback_address_is_advertised() {
-        // Several engines on one machine, as the multi-node harness runs them.
-        assert_eq!(
-            advertise_address(Some("127.0.0.1:50151".into()), None, "0.0.0.0:50151").as_deref(),
-            Some("127.0.0.1:50151")
-        );
-    }
-
-    #[test]
-    fn an_unbracketed_ipv6_pod_address_is_advertised_bracketed() {
-        assert_eq!(
-            advertise_address(Some("fd00:10:244::5:50051".into()), None, "[::]:50051").as_deref(),
-            Some("[fd00:10:244::5]:50051")
-        );
-    }
-
-    #[test]
-    fn an_undialable_advertise_address_is_not_used() {
-        assert_eq!(
-            advertise_address(Some("0.0.0.0:50051".into()), None, "10.0.0.9:50051"),
-            None,
-            "an explicit but useless setting is a mistake, not a cue to guess"
-        );
-    }
-}
-
 /// How long after its claim an activation counts as in flight: a wake-up that
 /// arrives sooner is left for that activation's completion to take, and one
 /// that arrives later releases the claim.
@@ -2624,5 +2508,121 @@ async fn warn_of_unscoped_keys(pool: &sqlx::PgPool) {
         ),
         Ok(_) => {}
         Err(e) => debug!(error = %e, "Could not check for API keys without an organization"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A pool that is never connected: the OIDC branch of the guard decides
+    /// before it reads anything.
+    fn unconnected_pool() -> sqlx::PgPool {
+        sqlx::postgres::PgPoolOptions::new()
+            .connect_lazy("postgresql://nobody@127.0.0.1:1/none")
+            .expect("a lazy pool")
+    }
+
+    fn oidc(organization_claim: Option<&str>) -> orcher_core::auth::OidcConfig {
+        serde_json::from_value(serde_json::json!({
+            "issuer": "https://idp.example.com",
+            "audience": "orcher",
+            "organization_claim": organization_claim,
+        }))
+        .expect("an OIDC configuration")
+    }
+
+    #[tokio::test]
+    async fn tokens_that_name_organizations_need_a_declared_tenancy() {
+        let mut security = config::OrchestratorConfig::default().security;
+        security.auth_mode = orcher_core::grpc::auth_layer::AuthMode::Oidc;
+        security.oidc = Some(oidc(Some("org_id")));
+        let refused = refuse_undeclared_tenants(&unconnected_pool(), &security)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(refused.contains("security.tenancy"), "{refused}");
+
+        // Tokens that name no organization: a single tenant, and no key is
+        // read in OIDC mode.
+        security.oidc = Some(oidc(None));
+        refuse_undeclared_tenants(&unconnected_pool(), &security)
+            .await
+            .expect("single-tenant tokens start");
+    }
+
+    #[test]
+    fn test_cli_parsing() {
+        let cli = Cli::parse_from(["orchestrator", "--log-level", "debug"]);
+        assert_eq!(cli.log_level, "debug");
+        assert_eq!(cli.log_format, "compact");
+    }
+
+    #[test]
+    fn test_default_config() {
+        let config = config::OrchestratorConfig::default();
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn the_environment_wins_over_the_file_and_the_bind_address() {
+        assert_eq!(
+            advertise_address(
+                Some("10.0.0.7:50051".into()),
+                Some("10.0.0.8:50051"),
+                "10.0.0.9:50051"
+            )
+            .as_deref(),
+            Some("10.0.0.7:50051")
+        );
+        assert_eq!(
+            advertise_address(None, Some("10.0.0.8:50051"), "0.0.0.0:50051").as_deref(),
+            Some("10.0.0.8:50051")
+        );
+    }
+
+    #[test]
+    fn a_concrete_bind_address_is_advertised_and_a_wildcard_or_loopback_is_not() {
+        assert_eq!(
+            advertise_address(None, None, "10.0.0.9:50051").as_deref(),
+            Some("10.0.0.9:50051")
+        );
+        assert_eq!(advertise_address(None, None, "0.0.0.0:50051"), None);
+        assert_eq!(
+            advertise_address(Some("  ".into()), None, "[::]:50051"),
+            None
+        );
+        assert_eq!(
+            advertise_address(None, None, "127.0.0.1:50151"),
+            None,
+            "a loopback bind address means this machine only"
+        );
+        assert_eq!(advertise_address(None, None, "[::1]:50051"), None);
+    }
+
+    #[test]
+    fn an_explicit_loopback_address_is_advertised() {
+        // Several engines on one machine, as the multi-node harness runs them.
+        assert_eq!(
+            advertise_address(Some("127.0.0.1:50151".into()), None, "0.0.0.0:50151").as_deref(),
+            Some("127.0.0.1:50151")
+        );
+    }
+
+    #[test]
+    fn an_unbracketed_ipv6_pod_address_is_advertised_bracketed() {
+        assert_eq!(
+            advertise_address(Some("fd00:10:244::5:50051".into()), None, "[::]:50051").as_deref(),
+            Some("[fd00:10:244::5]:50051")
+        );
+    }
+
+    #[test]
+    fn an_undialable_advertise_address_is_not_used() {
+        assert_eq!(
+            advertise_address(Some("0.0.0.0:50051".into()), None, "10.0.0.9:50051"),
+            None,
+            "an explicit but useless setting is a mistake, not a cue to guess"
+        );
     }
 }

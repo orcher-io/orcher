@@ -109,7 +109,7 @@ pub async fn handle_schedule_task(
     )
     .await?
     {
-        return Ok(Default::default());
+        return Ok(());
     }
 
     // Create the scheduled task execution record and its outbox dispatch,

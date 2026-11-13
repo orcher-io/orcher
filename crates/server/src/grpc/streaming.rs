@@ -22,7 +22,6 @@ pub type BoxStream<T> = Pin<Box<dyn Stream<Item = T> + Send + 'static>>;
 /// # Returns
 ///
 /// A pinned boxed stream that can be easily composed and transformed
-#[must_use]
 pub fn to_boxed_stream<T>(stream: Streaming<T>) -> BoxStream<Result<T, tonic::Status>>
 where
     T: Send + 'static,
@@ -54,18 +53,7 @@ where
     }
 
     /// Consume the adapter and return the inner stream
-    #[must_use]
     pub fn into_inner(self) -> BoxStream<Result<T, tonic::Status>> {
         self.inner
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_stream_adapter_creation() {
-        // This test verifies the StreamAdapter type can be constructed
-        // Actual streaming tests require a running gRPC service
-        assert!(true);
     }
 }

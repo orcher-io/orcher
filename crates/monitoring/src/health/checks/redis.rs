@@ -288,8 +288,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_redis_health_check_slow_ping() {
-        let mut config = RedisHealthCheckConfig::default();
-        config.max_ping_time = Duration::from_millis(5); // Very low threshold
+        let config = RedisHealthCheckConfig {
+            max_ping_time: Duration::from_millis(5), // Very low threshold
+            ..Default::default()
+        };
 
         let check = RedisHealthCheck::with_config("test_redis", config);
         check.set_connection_available(true);

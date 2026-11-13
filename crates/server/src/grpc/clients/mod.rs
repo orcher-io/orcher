@@ -53,6 +53,13 @@
 //! # }
 //! ```
 
+/// The in-process channel the REST handlers call the engine over, with the
+/// interceptor that adds the caller's credential to each request.
+pub type AuthenticatedChannel = tonic::service::interceptor::InterceptedService<
+    tonic::transport::Channel,
+    fn(tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status>,
+>;
+
 pub mod execution;
 pub mod namespace;
 pub mod workflow;

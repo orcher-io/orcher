@@ -442,8 +442,6 @@ mod tests {
     fn test_describe_orcher_metrics() {
         // Test that metric description doesn't panic
         describe_orcher_metrics();
-        // If we reach here without panicking, the test passes
-        assert!(true);
     }
 
     #[test]

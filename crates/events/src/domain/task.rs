@@ -214,7 +214,7 @@ mod tests {
         let task_id = TaskId::generate();
         let submitted_at = Timestamptz::now();
         let event = TaskEvent::Submitted {
-            task_id: task_id.clone(),
+            task_id,
             submitted_at,
             priority: 5,
         };
@@ -234,7 +234,7 @@ mod tests {
         let assigned_at = Timestamptz::now();
 
         let event = TaskEvent::Assigned {
-            task_id: task_id.clone(),
+            task_id,
             worker_id,
             assigned_at,
         };
@@ -250,7 +250,7 @@ mod tests {
         let completed_at = Timestamptz::now();
 
         let event = TaskEvent::Completed {
-            task_id: task_id.clone(),
+            task_id,
             result,
             completed_at,
         };
@@ -269,7 +269,7 @@ mod tests {
         let failed_at = Timestamptz::now();
 
         let event = TaskEvent::Failed {
-            task_id: task_id.clone(),
+            task_id,
             error,
             retry_count: 1,
             failed_at,
@@ -285,7 +285,7 @@ mod tests {
     fn test_task_event_cancelled() {
         let task_id = TaskId::generate();
         let event = TaskEvent::Cancelled {
-            task_id: task_id.clone(),
+            task_id,
             reason: "User requested".to_string(),
             cancelled_at: Timestamptz::now(),
         };
@@ -408,48 +408,48 @@ mod tests {
 
         let events = vec![
             TaskEvent::Submitted {
-                task_id: task_id.clone(),
+                task_id,
                 submitted_at: now,
                 priority: 5,
             },
             TaskEvent::Assigned {
-                task_id: task_id.clone(),
-                worker_id: worker_id.clone(),
+                task_id,
+                worker_id,
                 assigned_at: now,
             },
             TaskEvent::Started {
-                task_id: task_id.clone(),
-                worker_id: worker_id.clone(),
+                task_id,
+                worker_id,
                 started_at: now,
             },
             TaskEvent::Completed {
-                task_id: task_id.clone(),
+                task_id,
                 result: TaskResult::success(None, None),
                 completed_at: now,
             },
             TaskEvent::Failed {
-                task_id: task_id.clone(),
+                task_id,
                 error: "error".to_string(),
                 retry_count: 1,
                 failed_at: now,
             },
             TaskEvent::Cancelled {
-                task_id: task_id.clone(),
+                task_id,
                 reason: "reason".to_string(),
                 cancelled_at: now,
             },
             TaskEvent::Retrying {
-                task_id: task_id.clone(),
+                task_id,
                 retry_count: 1,
                 next_retry_at: now,
             },
             TaskEvent::TimedOut {
-                task_id: task_id.clone(),
+                task_id,
                 timeout_seconds: 300,
                 timed_out_at: now,
             },
             TaskEvent::Dispatched {
-                task_id: task_id.clone(),
+                task_id,
                 queue_name: "queue".to_string(),
                 message_id: "msg".to_string(),
                 routing_key: "key".to_string(),

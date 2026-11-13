@@ -165,7 +165,7 @@ mod tests {
         let capabilities = vec!["python".to_string(), "nodejs".to_string()];
 
         let event = WorkerEvent::Registered {
-            worker_id: worker_id.clone(),
+            worker_id,
             capabilities: capabilities.clone(),
             registered_at,
         };
@@ -186,7 +186,7 @@ mod tests {
         let load = 0.45;
 
         let event = WorkerEvent::HeartbeatReceived {
-            worker_id: worker_id.clone(),
+            worker_id,
             load,
             timestamp,
         };
@@ -205,7 +205,7 @@ mod tests {
 
         // Healthy
         let healthy_event = WorkerEvent::HealthChanged {
-            worker_id: worker_id.clone(),
+            worker_id,
             healthy: true,
             reason: None,
             timestamp,
@@ -214,7 +214,7 @@ mod tests {
 
         // Unhealthy
         let unhealthy_event = WorkerEvent::HealthChanged {
-            worker_id: worker_id.clone(),
+            worker_id,
             healthy: false,
             reason: Some("High CPU usage".to_string()),
             timestamp,
@@ -228,7 +228,7 @@ mod tests {
         let offline_at = Timestamptz::now();
 
         let event = WorkerEvent::Offline {
-            worker_id: worker_id.clone(),
+            worker_id,
             reason: "Connection timeout".to_string(),
             offline_at,
         };
@@ -247,7 +247,7 @@ mod tests {
         let available_capacity = 0.35;
 
         let event = WorkerEvent::LoadUpdated {
-            worker_id: worker_id.clone(),
+            worker_id,
             load,
             available_capacity,
         };
@@ -263,7 +263,7 @@ mod tests {
         let deregistered_at = Timestamptz::now();
 
         let event = WorkerEvent::Deregistered {
-            worker_id: worker_id.clone(),
+            worker_id,
             reason: "Graceful shutdown".to_string(),
             deregistered_at,
         };
@@ -280,7 +280,7 @@ mod tests {
         let timestamp = Timestamptz::now();
 
         let event = WorkerEvent::CapacityChanged {
-            worker_id: worker_id.clone(),
+            worker_id,
             new_capacity: 10,
             timestamp,
         };
@@ -295,7 +295,7 @@ mod tests {
         let timestamp = Timestamptz::now();
 
         let event = WorkerEvent::Overloaded {
-            worker_id: worker_id.clone(),
+            worker_id,
             current_load: 0.95,
             threshold: 0.80,
             timestamp,
@@ -340,43 +340,43 @@ mod tests {
 
         let events = vec![
             WorkerEvent::Registered {
-                worker_id: worker_id.clone(),
+                worker_id,
                 capabilities: vec!["python".to_string()],
                 registered_at: now,
             },
             WorkerEvent::HeartbeatReceived {
-                worker_id: worker_id.clone(),
+                worker_id,
                 load: 0.5,
                 timestamp: now,
             },
             WorkerEvent::HealthChanged {
-                worker_id: worker_id.clone(),
+                worker_id,
                 healthy: true,
                 reason: None,
                 timestamp: now,
             },
             WorkerEvent::Offline {
-                worker_id: worker_id.clone(),
+                worker_id,
                 reason: "timeout".to_string(),
                 offline_at: now,
             },
             WorkerEvent::LoadUpdated {
-                worker_id: worker_id.clone(),
+                worker_id,
                 load: 0.6,
                 available_capacity: 0.4,
             },
             WorkerEvent::Deregistered {
-                worker_id: worker_id.clone(),
+                worker_id,
                 reason: "shutdown".to_string(),
                 deregistered_at: now,
             },
             WorkerEvent::CapacityChanged {
-                worker_id: worker_id.clone(),
+                worker_id,
                 new_capacity: 10,
                 timestamp: now,
             },
             WorkerEvent::Overloaded {
-                worker_id: worker_id.clone(),
+                worker_id,
                 current_load: 0.95,
                 threshold: 0.8,
                 timestamp: now,

@@ -84,7 +84,7 @@ impl ClaimScope for ClusterClaimScope {
                 // rather than swept — a fresh node should start doing its own
                 // work immediately, not scan the whole table.
                 let seen = self.polls.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
-                seen % n == 0
+                seen.is_multiple_of(n)
             }
         }
     }

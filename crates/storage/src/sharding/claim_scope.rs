@@ -79,6 +79,10 @@ pub struct ClaimBounds {
     pub max: i32,
 }
 
+/// The four bind values of a shard filter: each range's low and high shard,
+/// then the lowest and highest. All `None` for an unfiltered poll.
+pub type ClaimParams = (Option<Vec<i32>>, Option<Vec<i32>>, Option<i32>, Option<i32>);
+
 impl ClaimBounds {
     /// Build bounds from a scope, or `None` when this poll must not filter:
     /// no scope injected, ownership unknown, or a sweep poll.
@@ -117,9 +121,7 @@ impl ClaimBounds {
     /// Split into the four bind values, using `None` for an unfiltered poll.
     /// Returned rather than bound here so call sites keep their parameter order
     /// explicit and visible next to the SQL.
-    pub fn params(
-        this: Option<&Self>,
-    ) -> (Option<Vec<i32>>, Option<Vec<i32>>, Option<i32>, Option<i32>) {
+    pub fn params(this: Option<&Self>) -> ClaimParams {
         match this {
             Some(b) => (
                 Some(b.los.clone()),
@@ -178,7 +180,10 @@ mod tests {
             match self.sweep_every {
                 0 => false, // sweep disabled
                 1 => true,  // every poll unfiltered
-                n => self.sweeps.fetch_add(1, Ordering::Relaxed) % n == 0,
+                n => self
+                    .sweeps
+                    .fetch_add(1, Ordering::Relaxed)
+                    .is_multiple_of(n),
             }
         }
     }

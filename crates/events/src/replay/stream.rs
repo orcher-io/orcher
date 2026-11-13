@@ -366,7 +366,7 @@ mod tests {
         assert_eq!(config.batch_size, 100);
         assert_eq!(config.buffer_size, 1000);
         assert_eq!(config.start_position, 0);
-        assert_eq!(config.follow, false);
+        assert!(!config.follow);
     }
 
     #[test]
@@ -382,7 +382,7 @@ mod tests {
         assert_eq!(config.batch_size, 500);
         assert_eq!(config.buffer_size, 5000);
         assert_eq!(config.start_position, 100);
-        assert_eq!(config.follow, true);
+        assert!(config.follow);
         assert_eq!(config.poll_interval_ms, 2000);
         assert_eq!(config.max_events, Some(10000));
     }

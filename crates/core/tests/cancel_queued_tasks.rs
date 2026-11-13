@@ -593,7 +593,6 @@ async fn interrupted_work_that_fails_is_not_retried() {
                 failure_type: "TaskCancelled".to_string(),
                 ..Default::default()
             }),
-            ..Default::default()
         }))
         .await
         .expect("report the failure");

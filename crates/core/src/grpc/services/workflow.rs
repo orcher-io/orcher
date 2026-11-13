@@ -1984,7 +1984,7 @@ impl WorkflowServiceTrait for WorkflowService {
                     .map_err(lookup_failed)?,
             };
 
-            if let Some(ref exec) = existing.as_ref().filter(|e| is_active(e.status.as_str())) {
+            if let Some(exec) = existing.as_ref().filter(|e| is_active(e.status.as_str())) {
                 // --- Path A: workflow is alive — deliver the event, once for
                 // the request id, as SendEvent does ---
                 let appended = delivery

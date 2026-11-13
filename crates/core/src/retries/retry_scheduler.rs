@@ -555,7 +555,7 @@ impl TaskRetryScheduler {
             rows.extend(batch);
         }
         // Merge across shards: earliest-scheduled first, capped at the per-cycle budget.
-        rows.sort_by(|a, b| a.scheduled_at.cmp(&b.scheduled_at));
+        rows.sort_by_key(|a| a.scheduled_at);
         rows.truncate(100);
 
         Ok(rows.into_iter().map(TaskExecution::from).collect())
@@ -639,7 +639,7 @@ impl TaskRetryScheduler {
                 })?;
             rows.extend(batch);
         }
-        rows.sort_by(|a, b| a.scheduled_at.cmp(&b.scheduled_at));
+        rows.sort_by_key(|a| a.scheduled_at);
         rows.truncate(100);
 
         Ok(rows.into_iter().map(TaskExecution::from).collect())

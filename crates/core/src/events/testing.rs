@@ -173,8 +173,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_test_event_bridge_with_config() {
-        let mut config = EventBridgeConfig::default();
-        config.enable_persistence = false;
+        let config = EventBridgeConfig {
+            enable_persistence: false,
+            ..Default::default()
+        };
 
         let (bridge, _handle) = create_test_event_bridge_with_config(config);
 

@@ -796,16 +796,6 @@ impl ActorService for ActorServiceImpl {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_actor_service_impl_creation() {
-        // Note: This requires actual Redis and PostgreSQL connections
-        // Use integration tests with testcontainers for real testing
-        assert!(true);
-    }
-}
-
 /// An actor operation belongs to the organization that invoked it.
 ///
 /// Operations wait in one queue shared by every tenant and are answered by

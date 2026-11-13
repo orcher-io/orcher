@@ -16,6 +16,9 @@
 //! cargo test -p orcher-core --test forwarded_completion_commits_on_owner -- --ignored --test-threads=1
 //! ```
 
+// Helpers return `tonic::Status`, the error the engine's gRPC services answer with.
+#![allow(clippy::result_large_err)]
+
 use std::sync::{Arc, Mutex};
 
 use orcher_cluster::{
@@ -310,8 +313,11 @@ async fn cleanup(pool: &PgPool, id: Uuid, names: &Names) {
 }
 
 /// What the owner saw of each request it was sent.
+/// Each request's relay mark and credential, in arrival order.
+type Marks = Vec<(Option<String>, Option<String>)>;
+
 #[derive(Default, Clone)]
-struct Seen(Arc<Mutex<Vec<(Option<String>, Option<String>)>>>);
+struct Seen(Arc<Mutex<Marks>>);
 
 /// Serve `service` as node b on a local port, recording the relay mark and
 /// the credential on every request. Returns the address it listens on.

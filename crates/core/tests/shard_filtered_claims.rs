@@ -65,7 +65,11 @@ impl ClaimScope for FixedScope {
         match self.sweep_every {
             0 => false,
             1 => true,
-            n => self.polls.fetch_add(1, Ordering::Relaxed).wrapping_add(1) % n == 0,
+            n => self
+                .polls
+                .fetch_add(1, Ordering::Relaxed)
+                .wrapping_add(1)
+                .is_multiple_of(n),
         }
     }
 }
