@@ -65,7 +65,7 @@ jobs:
   # identical run. Any other push, a manual run and the weekly run go ahead.
   verified:
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       actions: read
       contents: read
@@ -103,10 +103,10 @@ jobs:
   ci:
     needs: verified
     if: ${{ !cancelled() && needs.verified.outputs.skip != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -117,7 +117,7 @@ jobs:
       # repository it needs beside this one. Checked out before the cache is
       # restored, so the cache can cover its build too.
       - name: Checkout the Rust SDK for the contract suite
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: orcher-io/sdk-rust
           path: sdk-rust
