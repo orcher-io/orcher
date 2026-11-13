@@ -47,7 +47,8 @@ thiserror = { workspace = true }
 # Time and identifiers
 chrono = { workspace = true }
 jiff = { workspace = true }
-uuid = { workspace = true }
+# v5: deterministic ids derived from a namespace and a name (repository.rs).
+uuid = { workspace = true, features = ["v5"] }
 
 # Cryptography for checksums
 sha2 = { workspace = true }
