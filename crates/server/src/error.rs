@@ -18,9 +18,10 @@ pub type Result<T> = std::result::Result<T, ServerError>;
 /// Error types that can occur in the server
 #[derive(Debug, thiserror::Error)]
 pub enum ServerError {
-    /// gRPC client error
+    /// gRPC client error. Boxed: a `tonic::Status` is large, and every `Result`
+    /// in this crate would otherwise carry its size.
     #[error("gRPC error: {0}")]
-    Grpc(#[from] tonic::Status),
+    Grpc(Box<tonic::Status>),
 
     /// Configuration error
     #[error("Configuration error: {0}")]
@@ -89,6 +90,12 @@ pub enum ServerError {
     /// JSON deserialization error
     #[error("Invalid JSON: {0}")]
     JsonRejection(String),
+}
+
+impl From<tonic::Status> for ServerError {
+    fn from(status: tonic::Status) -> Self {
+        Self::Grpc(Box::new(status))
+    }
 }
 
 impl ServerError {
@@ -193,7 +200,7 @@ impl ServerError {
             Code::Unauthenticated => Self::Unauthorized(message),
             Code::Unavailable | Code::ResourceExhausted => Self::ServiceUnavailable(message),
             Code::Unimplemented => Self::NotImplemented(message),
-            _ => Self::Grpc(status),
+            _ => Self::Grpc(Box::new(status)),
         }
     }
 

@@ -18,6 +18,9 @@
 //! cargo test -p orcher-core --test child_start -- --ignored
 //! ```
 
+// Helpers return `tonic::Status`, the error the engine's gRPC services answer with.
+#![allow(clippy::result_large_err)]
+
 use orcher_core::engine::dispatch::PollingManager;
 use orcher_core::engine::queues::outbox::OutboxQueue;
 use orcher_core::engine::WorkflowCoordinator;

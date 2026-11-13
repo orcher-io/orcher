@@ -29,12 +29,3 @@ pub trait Exporter {
     fn is_running(&self) -> bool;
     fn health_status(&self) -> ExporterResult<String>;
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_module_structure() {
-        // Basic test to verify module compiles
-        assert!(true);
-    }
-}

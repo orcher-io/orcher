@@ -163,7 +163,7 @@ mod tests {
 
         let event = ExecutionEvent::Created {
             execution_id: execution_id.clone(),
-            workflow_id: workflow_id.clone(),
+            workflow_id,
             trigger: "manual".to_string(),
             created_at,
         };
@@ -336,7 +336,7 @@ mod tests {
         let events = vec![
             ExecutionEvent::Created {
                 execution_id: execution_id.clone(),
-                workflow_id: workflow_id.clone(),
+                workflow_id,
                 trigger: "manual".to_string(),
                 created_at: now,
             },

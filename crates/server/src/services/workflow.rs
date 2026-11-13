@@ -524,6 +524,7 @@ impl WorkflowService {
     /// # Returns
     ///
     /// Returns paginated list of execution summaries.
+    #[allow(clippy::too_many_arguments)]
     pub async fn list_executions(
         &self,
         workflow_name: Option<String>,

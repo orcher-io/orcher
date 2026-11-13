@@ -350,7 +350,7 @@ mod tests {
 
         assert_eq!(config.max_snapshots_per_stream, 10);
         assert_eq!(config.min_events_between_snapshots, 100);
-        assert_eq!(config.compress, true);
+        assert!(config.compress);
     }
 
     #[test]
@@ -362,7 +362,7 @@ mod tests {
 
         assert_eq!(config.strategy, SnapshotStrategy::EveryNEvents(500));
         assert_eq!(config.max_snapshots_per_stream, 5);
-        assert_eq!(config.compress, false);
+        assert!(!config.compress);
     }
 
     #[test]

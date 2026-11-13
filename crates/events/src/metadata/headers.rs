@@ -213,9 +213,9 @@ mod tests {
 
     #[test]
     fn test_header_value_float() {
-        let value = HeaderValue::Float(3.14);
+        let value = HeaderValue::Float(2.5);
         assert!(value.is_float());
-        assert_eq!(value.as_f64(), Some(3.14));
+        assert_eq!(value.as_f64(), Some(2.5));
     }
 
     #[test]
@@ -246,8 +246,8 @@ mod tests {
 
     #[test]
     fn test_header_value_from_f64() {
-        let value: HeaderValue = 3.14f64.into();
-        assert_eq!(value.as_f64(), Some(3.14));
+        let value: HeaderValue = 2.5f64.into();
+        assert_eq!(value.as_f64(), Some(2.5));
     }
 
     #[test]
@@ -278,7 +278,7 @@ mod tests {
         let mut headers = EventHeaders::new();
         headers.set("string", "value");
         headers.set("integer", 42);
-        headers.set("float", 3.14);
+        headers.set("float", 2.5);
         headers.set("boolean", true);
 
         assert_eq!(
@@ -286,7 +286,7 @@ mod tests {
             Some("value")
         );
         assert_eq!(headers.get("integer").and_then(|v| v.as_i64()), Some(42));
-        assert_eq!(headers.get("float").and_then(|v| v.as_f64()), Some(3.14));
+        assert_eq!(headers.get("float").and_then(|v| v.as_f64()), Some(2.5));
         assert_eq!(headers.get("boolean").and_then(|v| v.as_bool()), Some(true));
     }
 

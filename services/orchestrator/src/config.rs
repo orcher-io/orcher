@@ -1408,13 +1408,15 @@ mod tests {
 
     #[test]
     fn test_sync_match_to_routing_config() {
-        let mut polling = PollingConfig::default();
-        polling.use_sync_match = true;
-        polling.max_waiters_per_queue = 5000;
-        polling.affinity_enabled = true;
-        polling.affinity_lease_secs = 60;
-        polling.affinity_max_lease_secs = 600;
-        polling.routing_cleanup_interval_secs = 45;
+        let polling = PollingConfig {
+            use_sync_match: true,
+            max_waiters_per_queue: 5000,
+            affinity_enabled: true,
+            affinity_lease_secs: 60,
+            affinity_max_lease_secs: 600,
+            routing_cleanup_interval_secs: 45,
+            ..Default::default()
+        };
 
         let routing = polling.to_routing_config();
 

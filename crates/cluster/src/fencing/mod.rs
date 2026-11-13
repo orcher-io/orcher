@@ -194,6 +194,30 @@ impl ShardOwnership {
     }
 }
 
+// Bridge to the storage-layer write fence, so repositories can refuse a write
+// from a superseded owner without depending on this crate. `acquire_for` is
+// already lazy — it hits the store once per shard and serves the generation
+// from memory afterwards — so this is a map lookup and an integer compare on
+// the hot path, not a query per write.
+#[cfg(feature = "storage")]
+#[async_trait::async_trait]
+impl orcher_storage::sharding::WriteFence for ShardOwnership {
+    async fn guard(&self, workflow_id: uuid::Uuid) -> Option<orcher_storage::sharding::FenceToken> {
+        match self.acquire_for(&workflow_id.to_string()).await {
+            Ok(Some((shard, generation))) => Some(orcher_storage::sharding::FenceToken {
+                shard_id: shard.0 as i32,
+                generation: generation as i64,
+            }),
+            // A live other node owns the shard: we are superseded, so the caller
+            // must refuse the write rather than proceed unguarded.
+            Ok(None) => None,
+            // A store error is not evidence that we still hold the shard, and
+            // this fence fails closed — so it is also a refusal.
+            Err(_) => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -488,29 +512,5 @@ mod tests {
         // so it renews — but the store rejects (b holds it now) → a drops it.
         a.maintain().await.unwrap();
         assert_eq!(a.held_count(), 0, "a drops the shard it was fenced out of");
-    }
-}
-
-// Bridge to the storage-layer write fence, so repositories can refuse a write
-// from a superseded owner without depending on this crate. `acquire_for` is
-// already lazy — it hits the store once per shard and serves the generation
-// from memory afterwards — so this is a map lookup and an integer compare on
-// the hot path, not a query per write.
-#[cfg(feature = "storage")]
-#[async_trait::async_trait]
-impl orcher_storage::sharding::WriteFence for ShardOwnership {
-    async fn guard(&self, workflow_id: uuid::Uuid) -> Option<orcher_storage::sharding::FenceToken> {
-        match self.acquire_for(&workflow_id.to_string()).await {
-            Ok(Some((shard, generation))) => Some(orcher_storage::sharding::FenceToken {
-                shard_id: shard.0 as i32,
-                generation: generation as i64,
-            }),
-            // A live other node owns the shard: we are superseded, so the caller
-            // must refuse the write rather than proceed unguarded.
-            Ok(None) => None,
-            // A store error is not evidence that we still hold the shard, and
-            // this fence fails closed — so it is also a refusal.
-            Err(_) => None,
-        }
     }
 }

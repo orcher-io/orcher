@@ -1040,9 +1040,7 @@ impl WorkflowCoordinator {
         task: &TaskExecution,
     ) -> OrcherResult<Option<TaskDispatch>> {
         let scheduled_since = self.undispatched_repair_cutoff();
-        if !TaskExecutionRepository::claim_first_dispatch(&mut **tx, task.id, scheduled_since)
-            .await?
-        {
+        if !TaskExecutionRepository::claim_first_dispatch(tx, task.id, scheduled_since).await? {
             return Ok(None);
         }
         let workflow_id = task.workflow_id.as_uuid();

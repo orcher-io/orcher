@@ -104,7 +104,6 @@ impl Server {
 
     /// The REST API with all its middleware, for a process that serves it on
     /// a listener of its own, as the engine does on its HTTP port.
-    #[must_use]
     pub fn router(&self) -> Router {
         self.build_router()
     }

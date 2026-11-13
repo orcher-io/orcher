@@ -148,7 +148,7 @@ mod tests {
         let workflow_id = WorkflowId::generate();
         let started_at = Timestamptz::now();
         let event = WorkflowEvent::Started {
-            workflow_id: workflow_id.clone(),
+            workflow_id,
             started_at,
         };
 
@@ -169,7 +169,7 @@ mod tests {
         let step_id = "step_1".to_string();
 
         let event = WorkflowEvent::StepCompleted {
-            workflow_id: workflow_id.clone(),
+            workflow_id,
             step_id: step_id.clone(),
             completed_at,
         };
@@ -189,7 +189,7 @@ mod tests {
         let failed_at = Timestamptz::now();
 
         let event = WorkflowEvent::StepFailed {
-            workflow_id: workflow_id.clone(),
+            workflow_id,
             step_id: "step_2".to_string(),
             error: "Step execution failed".to_string(),
             failed_at,
@@ -209,7 +209,7 @@ mod tests {
         let completed_at = Timestamptz::now();
 
         let event = WorkflowEvent::Completed {
-            workflow_id: workflow_id.clone(),
+            workflow_id,
             completed_at,
         };
 
@@ -227,7 +227,7 @@ mod tests {
         let failed_at = Timestamptz::now();
 
         let event = WorkflowEvent::Failed {
-            workflow_id: workflow_id.clone(),
+            workflow_id,
             error: "Workflow timeout".to_string(),
             failed_at,
         };
@@ -245,7 +245,7 @@ mod tests {
         let paused_at = Timestamptz::now();
 
         let event = WorkflowEvent::Paused {
-            workflow_id: workflow_id.clone(),
+            workflow_id,
             paused_at,
         };
 
@@ -261,7 +261,7 @@ mod tests {
         let resumed_at = Timestamptz::now();
 
         let event = WorkflowEvent::Resumed {
-            workflow_id: workflow_id.clone(),
+            workflow_id,
             resumed_at,
         };
 
@@ -276,7 +276,7 @@ mod tests {
         let cancelled_at = Timestamptz::now();
 
         let event = WorkflowEvent::Cancelled {
-            workflow_id: workflow_id.clone(),
+            workflow_id,
             reason: "User requested".to_string(),
             cancelled_at,
         };
@@ -319,39 +319,39 @@ mod tests {
 
         let events = vec![
             WorkflowEvent::Started {
-                workflow_id: workflow_id.clone(),
+                workflow_id,
                 started_at: now,
             },
             WorkflowEvent::StepCompleted {
-                workflow_id: workflow_id.clone(),
+                workflow_id,
                 step_id: "step_1".to_string(),
                 completed_at: now,
             },
             WorkflowEvent::StepFailed {
-                workflow_id: workflow_id.clone(),
+                workflow_id,
                 step_id: "step_2".to_string(),
                 error: "error".to_string(),
                 failed_at: now,
             },
             WorkflowEvent::Completed {
-                workflow_id: workflow_id.clone(),
+                workflow_id,
                 completed_at: now,
             },
             WorkflowEvent::Failed {
-                workflow_id: workflow_id.clone(),
+                workflow_id,
                 error: "error".to_string(),
                 failed_at: now,
             },
             WorkflowEvent::Paused {
-                workflow_id: workflow_id.clone(),
+                workflow_id,
                 paused_at: now,
             },
             WorkflowEvent::Resumed {
-                workflow_id: workflow_id.clone(),
+                workflow_id,
                 resumed_at: now,
             },
             WorkflowEvent::Cancelled {
-                workflow_id: workflow_id.clone(),
+                workflow_id,
                 reason: "reason".to_string(),
                 cancelled_at: now,
             },
@@ -375,16 +375,16 @@ mod tests {
 
         let terminal_events = vec![
             WorkflowEvent::Completed {
-                workflow_id: workflow_id.clone(),
+                workflow_id,
                 completed_at: now,
             },
             WorkflowEvent::Failed {
-                workflow_id: workflow_id.clone(),
+                workflow_id,
                 error: "error".to_string(),
                 failed_at: now,
             },
             WorkflowEvent::Cancelled {
-                workflow_id: workflow_id.clone(),
+                workflow_id,
                 reason: "reason".to_string(),
                 cancelled_at: now,
             },
@@ -402,12 +402,12 @@ mod tests {
 
         let step_events = vec![
             WorkflowEvent::StepCompleted {
-                workflow_id: workflow_id.clone(),
+                workflow_id,
                 step_id: "step_1".to_string(),
                 completed_at: now,
             },
             WorkflowEvent::StepFailed {
-                workflow_id: workflow_id.clone(),
+                workflow_id,
                 step_id: "step_2".to_string(),
                 error: "error".to_string(),
                 failed_at: now,

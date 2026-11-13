@@ -157,7 +157,7 @@ fn get_available_space(path: &Path) -> Option<u64> {
         // Get filesystem stats using statvfs
         match nix::sys::statvfs::statvfs(path) {
             Ok(stats) => {
-                let available = stats.blocks_available() as u64 * stats.block_size();
+                let available = stats.blocks_available() * stats.block_size();
                 Some(available)
             }
             Err(e) => {

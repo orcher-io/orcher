@@ -424,7 +424,7 @@ mod tests {
 
         // Create multiple errors with the same pattern
         for i in 0..3 {
-            let error = MonitoringError::exporter_error("prometheus", &format!("error {}", i));
+            let error = MonitoringError::exporter_error("prometheus", format!("error {}", i));
             engine.correlate_error(error, "prometheus", "export_metrics");
         }
 

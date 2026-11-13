@@ -15,7 +15,7 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::schema::types::coordination::{OutboxTask, OutboxTaskType, QueueMetrics};
-use crate::sharding::{shard_predicate, ClaimBounds, ClaimScope};
+use crate::sharding::{shard_predicate, ClaimBounds, ClaimParams, ClaimScope};
 
 /// Outbox queue repository for task dispatch operations
 #[derive(Clone)]
@@ -44,7 +44,7 @@ impl OutboxRepository {
     }
 
     /// Bind values for this poll's shard filter, or all-`None` to run unfiltered.
-    fn claim_bounds(&self) -> (Option<Vec<i32>>, Option<Vec<i32>>, Option<i32>, Option<i32>) {
+    fn claim_bounds(&self) -> ClaimParams {
         ClaimBounds::params(ClaimBounds::for_poll(self.claim_scope.get()).as_ref())
     }
 

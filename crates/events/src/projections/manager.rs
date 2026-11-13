@@ -695,10 +695,4 @@ mod tests {
         let _wrapper = ProjectionWrapper::new(projection, Arc::new(state_store));
         // Just test that it compiles
     }
-
-    #[test]
-    fn test_projection_manager_compiles() {
-        // This test verifies the manager compiles with proper types
-        assert!(true);
-    }
 }
