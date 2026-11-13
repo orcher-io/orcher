@@ -86,7 +86,7 @@ use crate::migrations::sql::postgres::{
     V080_DROP_ALERT_AND_NOTIFICATION_TABLES, V081_DROP_QUEUE_TABLES,
     V082_DROP_UNUSED_VIEWS_TABLES_AND_FUNCTIONS, V083_DROP_EVENT_STORE_AND_IDEMPOTENCY_TABLES,
     V084_DROP_WORKFLOW_FAILED_NOTIFY, V085_ORGANIZATION_IDS_ARE_OPAQUE,
-    V086_JOURNAL_HOLDER_PREFERENCE,
+    V086_JOURNAL_HOLDER_PREFERENCE, V087_ACTIVATION_JOURNAL_POSITION,
 };
 use crate::OrcherResult;
 use sqlx::migrate::MigrateDatabase;
@@ -790,6 +790,11 @@ fn get_migrations() -> Vec<MigrationDef> {
             version: 86,
             description: "journal_holder_preference",
             sql: V086_JOURNAL_HOLDER_PREFERENCE,
+        },
+        MigrationDef {
+            version: 87,
+            description: "activation_journal_position",
+            sql: V087_ACTIVATION_JOURNAL_POSITION,
         },
     ]
 }

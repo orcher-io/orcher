@@ -443,6 +443,12 @@ pub mod sql {
         /// keeps its journal.
         pub const V086_JOURNAL_HOLDER_PREFERENCE: &str =
             include_str!("sql/postgres/V086__journal_holder_preference.sql");
+
+        /// V087 — `workflow_executions.claimed_through_entry` and
+        /// `observed_through_entry`: where in its journal the current and the
+        /// last completed activation read to.
+        pub const V087_ACTIVATION_JOURNAL_POSITION: &str =
+            include_str!("sql/postgres/V087__activation_journal_position.sql");
     }
 }
 

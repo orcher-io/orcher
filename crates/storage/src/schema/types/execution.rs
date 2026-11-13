@@ -258,6 +258,16 @@ pub struct WorkflowExecution {
     /// by a reset, and never changed.
     #[serde(default)]
     pub step_results_journaled: bool,
+    /// The run's last journal entry when its current activation was claimed
+    /// (V087): the activation carries its journal up to that entry and no
+    /// further. `None` before the first claim, or from an earlier engine.
+    #[serde(default)]
+    pub claimed_through_entry: Option<i64>,
+    /// [`claimed_through_entry`](Self::claimed_through_entry) of the last
+    /// activation whose completion was applied (V087): the run observed every
+    /// outcome up to it in an earlier activation. `None`: not known.
+    #[serde(default)]
+    pub observed_through_entry: Option<i64>,
 }
 
 /// `{}`, a run's annotations when it has none.
@@ -356,6 +366,8 @@ impl WorkflowExecution {
             history_lineage: None,
             activated_without_scheme: false,
             step_results_journaled: true,
+            claimed_through_entry: None,
+            observed_through_entry: None,
         }
     }
 
@@ -667,6 +679,8 @@ impl WorkflowExecutionBuilder {
             history_lineage: None,
             activated_without_scheme: false,
             step_results_journaled: true,
+            claimed_through_entry: None,
+            observed_through_entry: None,
         }
     }
 }

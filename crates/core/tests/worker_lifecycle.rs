@@ -1592,3 +1592,135 @@ async fn every_claim_path_keeps_the_hold() {
 
     cleanup(&pool, id, &execution_id).await;
 }
+
+// ── Where each activation reads to ─────────────────────────────────────────
+//
+// An activation carries the run's journal up to the entry its claim found
+// last (claimed_through_entry), and the next activation reports where the
+// last applied one read to (previous_started_event_id), so a worker can tell
+// the code it re-runs which outcomes the run has already observed.
+
+/// The last journal entry of the run, as recorded.
+async fn last_entry(pool: &PgPool, execution_id: &str) -> i64 {
+    sqlx::query_scalar(
+        "SELECT COALESCE(MAX(event_id), 0) FROM workflow_execution_journal WHERE execution_id = $1",
+    )
+    .bind(execution_id)
+    .fetch_one(pool)
+    .await
+    .expect("read the last entry")
+}
+
+/// A run's first activation reports no earlier one; the next reports where
+/// the first read to.
+#[tokio::test]
+#[ignore] // Requires PostgreSQL
+async fn an_activation_reports_where_the_last_applied_one_read_to() {
+    let pool = pool().await;
+    let (service, _, repo) = engine_holding(&pool, Duration::ZERO).await;
+    let task_queue = queue();
+    let instance = Uuid::new_v4().to_string();
+
+    let (id, execution_id) = journaled_workflow_on(&pool, &task_queue, 3).await;
+    let (identity, poller) = worker();
+    let first = poll_keeping(&service, &task_queue, &poller, &instance, false).await;
+    assert_eq!(first.execution_id, execution_id);
+    assert_eq!(
+        first.previous_started_event_id, 0,
+        "nothing was observed before"
+    );
+    let read_to = first.journal.iter().map(|e| e.entry_id).max().unwrap();
+    assert_eq!(read_to, 3);
+
+    service
+        .complete_workflow_execution(park_on_a_timer(
+            id,
+            &execution_id,
+            &identity,
+            &first.stream_entry_id,
+        ))
+        .await
+        .expect("the activation is completed");
+    journal_more(&pool, id, &execution_id, 1).await;
+    repo.release_claim_to_resume(&execution_id)
+        .await
+        .expect("release to resume");
+
+    let second = poll_keeping(&service, &task_queue, &poller, &instance, false).await;
+    assert_eq!(second.execution_id, execution_id);
+    assert_eq!(
+        second.previous_started_event_id, read_to,
+        "the run observed entries 1 to 3 in its first activation"
+    );
+    assert!(
+        second.journal.iter().any(|e| e.entry_id > read_to),
+        "and this one carries what came since"
+    );
+
+    cleanup(&pool, id, &execution_id).await;
+}
+
+/// An entry recorded after the claim is not in that activation: it carries
+/// exactly the journal its claim found.
+#[tokio::test]
+#[ignore] // Requires PostgreSQL
+async fn an_activation_carries_the_journal_its_claim_found() {
+    let pool = pool().await;
+    let (_, _, repo) = engine_holding(&pool, Duration::ZERO).await;
+    let task_queue = queue();
+    let (id, execution_id) = journaled_workflow_on(&pool, &task_queue, 2).await;
+
+    let claimed = repo
+        .claim_execution_by_id_from(&execution_id, "poller", 300, None, None, Some("p"), &[])
+        .await
+        .expect("claim")
+        .expect("claimed");
+    assert_eq!(claimed.claimed_through_entry, Some(2));
+    journal_more(&pool, id, &execution_id, 1).await;
+    assert_eq!(last_entry(&pool, &execution_id).await, 3);
+
+    let converter = orcher_core::engine::dispatch::Converter::new(Arc::new(
+        JournalRepository::new(pool.clone()),
+    ));
+    let activation = converter
+        .to_poll_response(&claimed)
+        .await
+        .expect("build the activation");
+    let ids: Vec<i64> = activation.journal.iter().map(|e| e.event_id).collect();
+    assert_eq!(ids, vec![1, 2], "entry 3 waits for the next activation");
+
+    cleanup(&pool, id, &execution_id).await;
+}
+
+/// A run whose step results are rebuilt from its execution log reports no
+/// position: its journal as sent is not its journal as recorded.
+#[tokio::test]
+#[ignore] // Requires PostgreSQL
+async fn a_run_without_journaled_step_results_reports_no_position() {
+    let pool = pool().await;
+    let (service, _, repo) = engine_holding(&pool, Duration::ZERO).await;
+    let task_queue = queue();
+    let instance = Uuid::new_v4().to_string();
+    let (id, execution_id) = workflow_on(&pool, &task_queue).await;
+    journal_more(&pool, id, &execution_id, 2).await;
+
+    let (identity, poller) = worker();
+    let first = poll_keeping(&service, &task_queue, &poller, &instance, false).await;
+    service
+        .complete_workflow_execution(park_on_a_timer(
+            id,
+            &execution_id,
+            &identity,
+            &first.stream_entry_id,
+        ))
+        .await
+        .expect("the activation is completed");
+    repo.release_claim_to_resume(&execution_id)
+        .await
+        .expect("release to resume");
+    let second = poll_keeping(&service, &task_queue, &poller, &instance, false).await;
+    assert_eq!(second.execution_id, execution_id);
+    assert_eq!(second.previous_started_event_id, 0);
+
+    cleanup(&pool, id, &execution_id).await;
+}
