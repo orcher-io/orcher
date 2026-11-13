@@ -2837,11 +2837,8 @@ impl ExecutionServiceTrait for ExecutionService {
         let poll_response = polled
             .await
             .map_err(|_| Status::internal("The poll ended without an answer"))?
-            .map_err(|e| {
-                // The permit goes back when `permit` drops on the way out.
-                error!(error = %e, "Failed to poll for execution");
-                Status::internal(format!("Failed to poll for execution: {}", e))
-            })?;
+            // The permit goes back when `permit` drops on the way out.
+            .map_err(|e| poll_failure("Failed to poll for execution", e))?;
 
         // No work: the permit goes back with the guard, and the worker is told
         // to poll again.
@@ -3794,10 +3791,10 @@ impl ExecutionServiceTrait for ExecutionService {
             .with_organization_id(org_id)
             .with_worker_instance_id(Some(req.worker_instance_id.clone()));
 
-            let task_opt = task_manager.poll_task(poll_req).await.map_err(|e| {
-                error!(error = %e, "TaskPollingManager failed");
-                Status::internal(format!("Failed to poll: {}", e))
-            })?;
+            let task_opt = task_manager
+                .poll_task(poll_req)
+                .await
+                .map_err(|e| poll_failure("Failed to poll for a task", e))?;
 
             return match task_opt {
                 Some(crate::engine::dispatch::task_manager::PollTaskResult::Claimed(task)) => {
@@ -6323,8 +6320,48 @@ fn may_act_on_task(
 // TESTS
 // ================================================================================================
 
+/// The status a poll that failed with `e` answers with. A timeout, such as a
+/// claim query a slow database did not answer in time, is transient: the
+/// worker should poll again, so it is UNAVAILABLE, logged as a warning.
+/// Anything else is an internal error.
+fn poll_failure(context: &str, e: OrcherError) -> Status {
+    if matches!(e, OrcherError::Timeout { .. }) {
+        warn!(error = %e, "{context}; the worker will poll again");
+        Status::unavailable(format!("{context}: {e}"))
+    } else {
+        error!(error = %e, "{context}");
+        Status::internal(format!("{context}: {e}"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
+
+    /// A poll whose claim timed out tells the worker to poll again, with the
+    /// time it waited; any other failure is internal.
+    #[test]
+    fn a_poll_that_timed_out_is_unavailable() {
+        use super::poll_failure;
+        use orcher_common::error::OrcherError;
+        use orcher_proto::tonic::Code;
+
+        let timed_out = poll_failure(
+            "Failed to poll for execution",
+            OrcherError::timeout("claim an execution", std::time::Duration::from_secs(2)),
+        );
+        assert_eq!(timed_out.code(), Code::Unavailable);
+        assert!(
+            timed_out.message().contains("timed out after 2s"),
+            "{}",
+            timed_out.message()
+        );
+
+        let failed = poll_failure(
+            "Failed to poll for execution",
+            OrcherError::internal("the database refused the connection"),
+        );
+        assert_eq!(failed.code(), Code::Internal);
+    }
 
     /// A failed step replays the failure type and retryability it recorded,
     /// and the generic type only when it recorded none.

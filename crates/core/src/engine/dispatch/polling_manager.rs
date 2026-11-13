@@ -294,6 +294,17 @@ impl PollingManager {
         self
     }
 
+    /// Wait at most `timeout` for a claim query before the poll fails with a
+    /// timeout. Without this, it waits 2 seconds.
+    pub fn with_claim_query_timeout(mut self, timeout: Duration) -> Self {
+        self.claimer = Claimer::with_query_timeout(
+            Arc::clone(&self.execution_repo),
+            self.claim_timeout_secs,
+            u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX),
+        );
+        self
+    }
+
     /// Create with Redis Streams support
     ///
     /// Enables consumer group-based polling with automatic load balancing.
@@ -1685,6 +1696,28 @@ mod tests {
         };
         assert_eq!(held.taken().execution_id, "b");
         assert!(prefetch.try_get(&key).is_none());
+    }
+
+    /// The claim query timeout a deployment configures is the one its claims
+    /// wait for, not the claimer's own default.
+    #[tokio::test]
+    async fn claims_wait_for_the_configured_query_timeout() {
+        let pool = sqlx::PgPool::connect_lazy("postgres://nobody@127.0.0.1:1/none").unwrap();
+        let manager = PollingManager::new(
+            Arc::new(WorkflowExecutionRepository::new(pool.clone())),
+            Arc::new(JournalRepository::new(pool)),
+            300,
+        );
+        assert_eq!(
+            manager.claimer.claim_query_timeout(),
+            Duration::from_secs(2)
+        );
+
+        let manager = manager.with_claim_query_timeout(Duration::from_millis(7500));
+        assert_eq!(
+            manager.claimer.claim_query_timeout(),
+            Duration::from_millis(7500)
+        );
     }
 
     /// A poll cancelled while it holds the refill flag must not keep it: the

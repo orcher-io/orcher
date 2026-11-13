@@ -46,7 +46,8 @@ claim_timeout_secs = 300
 # How long to wait for the claim query to execute (milliseconds)
 # This is the timeout for the PostgreSQL claim query, NOT the claim lease duration.
 # Raised from 200ms so the claim query survives PostgreSQL latency under load
-# Default: 2000 (2 seconds)
+# A poll whose claim takes longer fails as UNAVAILABLE and the worker polls again.
+# Default: 2000 (2 seconds). ORCHER_CLAIM_QUERY_TIMEOUT_MS overrides it.
 claim_query_timeout_ms = 2000
 
 # How long to wait when polling for work (seconds)

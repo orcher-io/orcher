@@ -826,7 +826,7 @@ impl ActorRouter {
                             .response_tx
                             .send(Err(orcher_common::error::OrcherError::timeout(
                                 format!("actor operation {}", operation_id),
-                                completion_timeout.as_secs(),
+                                completion_timeout,
                             )));
                 }
             }

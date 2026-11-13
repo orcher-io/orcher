@@ -228,6 +228,11 @@ fn load_configuration(cli: &Cli) -> Result<config::OrchestratorConfig> {
         config.worker_liveness.missed_refreshes = missed as u32;
     }
 
+    // How long a poll waits for its claim query before failing as UNAVAILABLE.
+    if let Some(ms) = env_number("ORCHER_CLAIM_QUERY_TIMEOUT_MS").filter(|n| *n > 0) {
+        config.polling.claim_query_timeout_ms = ms as u64;
+    }
+
     // How large a message and a payload may be.
     if let Some(bytes) = env_number("ORCHER_GRPC_MAX_MESSAGE_BYTES").filter(|n| *n > 0) {
         config.limits.grpc_max_message_bytes = bytes as usize;
@@ -882,6 +887,8 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
         None
     };
 
+    let claim_query_timeout =
+        std::time::Duration::from_millis(config.polling.claim_query_timeout_ms);
     let polling_manager = if config.polling.use_sync_match {
         {
             // Sync-match: hand work straight to a waiting worker, in-process.
@@ -919,7 +926,8 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
                 routing_config,
             )
             .with_task_repo(task_execution_repo.clone())
-            .with_journal_holder_hold(journal_holder_hold);
+            .with_journal_holder_hold(journal_holder_hold)
+            .with_claim_query_timeout(claim_query_timeout);
 
             // Enable prefetch if configured
             if let Some(prefetch_cfg) = prefetch_config.clone() {
@@ -942,7 +950,8 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
             config.polling.claim_timeout_secs as i64,
         )
         .with_task_repo(task_execution_repo.clone())
-        .with_journal_holder_hold(journal_holder_hold);
+        .with_journal_holder_hold(journal_holder_hold)
+        .with_claim_query_timeout(claim_query_timeout);
 
         // Enable prefetch if configured
         if let Some(prefetch_cfg) = prefetch_config {

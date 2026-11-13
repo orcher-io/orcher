@@ -45,6 +45,7 @@ orchestrator. Other commands run as given:
 | `ORCHER_AUTO_MIGRATE` | `true` | `false` skips the migration step at start. |
 | `ORCHER_DB_WAIT_SECS` | `60` | How long the entrypoint retries migrations while Postgres starts. |
 | `ORCHER_PG_MAX_CONNECTIONS` / `ORCHER_PG_MIN_CONNECTIONS` | `20` / `2` | Connection pool bounds. |
+| `ORCHER_CLAIM_QUERY_TIMEOUT_MS` | `2000` | How long a poll waits for PostgreSQL to answer its claim query. A poll that waits longer fails as `UNAVAILABLE` and the worker polls again; raise it when the database is slow. |
 | `ORCHER_DEFAULT_HEARTBEAT_TIMEOUT_SECS` | engine default | Heartbeat timeout for tasks that set none. |
 | `ORCHER_TIMEOUT_WATCHER_POLL_INTERVAL_SECS` / `ORCHER_TIMEOUT_WATCHER_GRACE_SECS` | engine default | Tighten to see task timeouts within seconds in tests. |
 | `ORCHER_WORKFLOW_RETRY_POLL_INTERVAL_SECS` | `30` | How often the workflow retry scheduler looks for retries that are due. A scheduled retry wakes the scheduler itself; this poll is the backstop. |
