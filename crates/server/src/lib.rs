@@ -5,14 +5,7 @@
 //! connection that passes the same authentication as the gRPC port, so a REST
 //! caller is granted exactly what the same credential is granted over gRPC.
 
-#![warn(missing_docs)]
 #![warn(clippy::all)]
-#![warn(clippy::pedantic)]
-#![allow(clippy::module_name_repetitions)]
-#![allow(clippy::missing_errors_doc)]
-#![allow(clippy::missing_panics_doc)]
-// Allow missing docs in generated proto code
-#![allow(missing_docs)]
 
 /// Main HTTP server implementation
 pub mod server;

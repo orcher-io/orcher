@@ -270,7 +270,6 @@ fn fail_request_marked(
             non_retryable,
             ..Default::default()
         }),
-        ..Default::default()
     })
 }
 

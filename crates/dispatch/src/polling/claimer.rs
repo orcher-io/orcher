@@ -148,6 +148,7 @@ impl Claimer {
     /// only its executions are claimed. `worker_instance_id` is the worker
     /// process the poll came from, recorded on the claim; `None` if it named
     /// none.
+    #[allow(clippy::too_many_arguments)]
     pub async fn claim_execution(
         &self,
         task_queue: &str,
@@ -425,6 +426,7 @@ impl Claimer {
     }
 
     /// Claims up to `limit` executions in a single DB round-trip.
+    #[allow(clippy::too_many_arguments)]
     pub async fn claim_batch(
         &self,
         task_queue: &str,
@@ -541,6 +543,7 @@ impl Claimer {
 
     /// Like `claim_batch` but skips `offset` rows first -- stagger offsets across
     /// workers to reduce index-page lock contention.
+    #[allow(clippy::too_many_arguments)]
     pub async fn claim_batch_with_offset(
         &self,
         task_queue: &str,

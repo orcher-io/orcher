@@ -92,7 +92,7 @@ impl AsyncHealthCheck for CacheHealthCheck {
 
         Ok(HealthCheckResult::new(&self.name, status)
             .with_message(format!("Cache hit rate: {:.1}%", self.hit_rate * 100.0))
-            .with_metadata("hit_rate", &format!("{:.3}", self.hit_rate))
+            .with_metadata("hit_rate", format!("{:.3}", self.hit_rate))
             .with_metadata("cache_size", "1024MB"))
     }
 }

@@ -5,6 +5,10 @@
 #![allow(clippy::derivable_impls)]
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
+// tonic's generated service traits return `Result<_, tonic::Status>`, and the
+// helpers they call return the same, so the error cannot be boxed where it is
+// produced without unboxing it again at every call site.
+#![allow(clippy::result_large_err)]
 #![deny(unsafe_code)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 

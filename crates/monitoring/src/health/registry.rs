@@ -500,7 +500,7 @@ mod tests {
                 tokio::time::sleep(self.delay).await;
             }
 
-            Ok(HealthCheckResult::new(&self.name, self.status.clone())
+            Ok(HealthCheckResult::new(&self.name, self.status)
                 .with_message(format!("Mock check result: {:?}", self.status)))
         }
     }

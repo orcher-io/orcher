@@ -49,12 +49,7 @@ const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 #[derive(Clone)]
 pub struct NamespaceServiceClient {
     /// Inner gRPC client
-    client: ProtoNamespaceServiceClient<
-        tonic::service::interceptor::InterceptedService<
-            Channel,
-            fn(tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status>,
-        >,
-    >,
+    client: ProtoNamespaceServiceClient<super::AuthenticatedChannel>,
     /// Server endpoint URL
     endpoint: String,
 }

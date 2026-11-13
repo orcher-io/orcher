@@ -279,7 +279,6 @@ fn completion(token: &[u8], result: &str) -> Request<CompleteTaskExecutionReques
         namespace: NAMESPACE.to_string(),
         identity: WORKER.to_string(),
         result: serde_json::to_vec(result).unwrap(),
-        ..Default::default()
     })
 }
 
@@ -293,7 +292,6 @@ fn failure(token: &[u8], failure_type: &str) -> Request<FailTaskExecutionRequest
             failure_type: failure_type.to_string(),
             ..Default::default()
         }),
-        ..Default::default()
     })
 }
 

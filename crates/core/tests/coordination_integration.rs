@@ -282,12 +282,16 @@ async fn test_multi_coordinator_cache_invalidation() {
     cleanup_test_data(&pool).await;
 
     // Create two coordinators
-    let mut config1 = CoordinatorConfig::default();
-    config1.instance_id = "coordinator-1".to_string();
+    let mut config1 = CoordinatorConfig {
+        instance_id: "coordinator-1".to_string(),
+        ..Default::default()
+    };
     config1.invalidation.coordinator_id = "coordinator-1".to_string();
 
-    let mut config2 = CoordinatorConfig::default();
-    config2.instance_id = "coordinator-2".to_string();
+    let mut config2 = CoordinatorConfig {
+        instance_id: "coordinator-2".to_string(),
+        ..Default::default()
+    };
     config2.invalidation.coordinator_id = "coordinator-2".to_string();
 
     let coordinator1 = WorkflowCoordinator::new(pool.clone(), config1)
@@ -484,9 +488,11 @@ async fn test_crash_recovery() {
     println!("✓ Simulated crash (coordinator dropped)");
 
     // Step 2: New coordinator recovers
-    let mut recovery_config = CoordinatorConfig::default();
-    recovery_config.enable_recovery = true;
-    recovery_config.instance_id = "coordinator-recovery".to_string();
+    let recovery_config = CoordinatorConfig {
+        enable_recovery: true,
+        instance_id: "coordinator-recovery".to_string(),
+        ..Default::default()
+    };
 
     let new_coordinator = WorkflowCoordinator::new(pool.clone(), recovery_config)
         .await

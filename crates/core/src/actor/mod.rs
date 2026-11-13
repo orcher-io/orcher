@@ -11,12 +11,3 @@ pub use state_storage::{ActorStateStorage, StateStorage};
 
 // Note: ActorServiceImpl is in crate::grpc::services::actor following core crate patterns
 // Import it via: use orcher_core::grpc::services::ActorServiceImpl;
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_module_structure() {
-        // Compile-time check that all modules are properly defined
-        assert!(true);
-    }
-}

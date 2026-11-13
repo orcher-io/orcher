@@ -100,14 +100,3 @@ pub use storage::S3Storage;
 
 // Re-export for convenience
 pub use crate::backends::wasm::{StorageMetadata, WasmBinary, WasmInfo, WasmStorage};
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_s3_module_exists() {
-        // Compile-time test to ensure module structure is correct
-        assert!(true);
-    }
-}

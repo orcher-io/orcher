@@ -64,12 +64,7 @@ const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 #[derive(Clone)]
 pub struct WorkflowServiceClient {
     /// Inner gRPC client
-    client: ProtoWorkflowServiceClient<
-        tonic::service::interceptor::InterceptedService<
-            Channel,
-            fn(tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status>,
-        >,
-    >,
+    client: ProtoWorkflowServiceClient<super::AuthenticatedChannel>,
     /// Server endpoint URL
     endpoint: String,
 }
@@ -147,6 +142,8 @@ impl WorkflowServiceClient {
     /// Start a workflow as `request` describes, and answer with the run the
     /// engine started, or the engine's refusal unchanged, so the caller can
     /// tell an unknown namespace from a bad argument from an outage.
+    // The engine's `Status` as is, so the handler can map its code to an HTTP status.
+    #[allow(clippy::result_large_err)]
     pub async fn start_workflow(
         &self,
         request: StartWorkflowRequest,
@@ -313,6 +310,8 @@ impl WorkflowServiceClient {
     /// to and including `target_event_id` and runs the workflow again from
     /// there, as a new execution. Returns the engine's status as it is, so a
     /// caller can tell a bad request from a failure.
+    // The engine's `Status` as is, so the handler can map its code to an HTTP status.
+    #[allow(clippy::result_large_err)]
     pub async fn reset_workflow(
         &self,
         execution_id: &str,
@@ -498,6 +497,7 @@ impl WorkflowServiceClient {
     /// # Errors
     ///
     /// Returns an error if the operation fails.
+    #[allow(clippy::too_many_arguments)]
     pub async fn send_event_with_start(
         &self,
         workflow_id: &str,

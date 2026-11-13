@@ -52,6 +52,6 @@ pub mod claim_scope;
 pub mod pool_routing;
 pub mod write_fence;
 
-pub use claim_scope::{shard_predicate, ClaimBounds, ClaimScope};
+pub use claim_scope::{shard_predicate, ClaimBounds, ClaimParams, ClaimScope};
 pub use pool_routing::ShardPoolResolver;
 pub use write_fence::{is_ownership_lost, FenceToken, WriteFence, OWNERSHIP_LOST};

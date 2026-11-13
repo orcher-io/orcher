@@ -968,7 +968,7 @@ mod tests {
 
     #[test]
     fn test_retry_conditions() {
-        let conditions = vec![
+        let conditions = [
             RetryCondition::AnyError,
             RetryCondition::Timeout,
             RetryCondition::NetworkError,

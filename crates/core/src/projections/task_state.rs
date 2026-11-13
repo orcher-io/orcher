@@ -558,13 +558,13 @@ mod tests {
         let task_ids: Vec<_> = (0..10).map(|_| TaskId::new_v4()).collect();
 
         // 3 submitted
-        for i in 0..3 {
+        for (i, task_id) in task_ids.iter().enumerate().take(3) {
             let event = create_test_event(
-                task_ids[i],
+                *task_id,
                 "TaskSubmitted",
                 i as i64 + 1,
                 serde_json::json!({
-                    "task_id": task_ids[i].as_uuid(),
+                    "task_id": task_id.as_uuid(),
                     "timestamp": Timestamptz::now().to_rfc3339()
                 }),
             );
@@ -572,24 +572,24 @@ mod tests {
         }
 
         // 4 running (submitted then started)
-        for i in 3..7 {
+        for (i, task_id) in task_ids.iter().enumerate().take(7).skip(3) {
             let submitted = create_test_event(
-                task_ids[i],
+                *task_id,
                 "TaskSubmitted",
                 (i * 2) as i64 + 1,
                 serde_json::json!({
-                    "task_id": task_ids[i].as_uuid(),
+                    "task_id": task_id.as_uuid(),
                     "timestamp": Timestamptz::now().to_rfc3339()
                 }),
             );
             projection.project(&submitted).await.unwrap();
 
             let started = create_test_event(
-                task_ids[i],
+                *task_id,
                 "TaskStarted",
                 (i * 2 + 1) as i64 + 1,
                 serde_json::json!({
-                    "task_id": task_ids[i].as_uuid(),
+                    "task_id": task_id.as_uuid(),
                     "worker_id": WorkerId::new_v4().as_uuid().to_string()
                 }),
             );
@@ -597,24 +597,24 @@ mod tests {
         }
 
         // 3 completed
-        for i in 7..10 {
+        for (i, task_id) in task_ids.iter().enumerate().take(10).skip(7) {
             let submitted = create_test_event(
-                task_ids[i],
+                *task_id,
                 "TaskSubmitted",
                 (i * 3) as i64 + 1,
                 serde_json::json!({
-                    "task_id": task_ids[i].as_uuid(),
+                    "task_id": task_id.as_uuid(),
                     "timestamp": Timestamptz::now().to_rfc3339()
                 }),
             );
             projection.project(&submitted).await.unwrap();
 
             let completed = create_test_event(
-                task_ids[i],
+                *task_id,
                 "TaskCompleted",
                 (i * 3 + 1) as i64 + 1,
                 serde_json::json!({
-                    "task_id": task_ids[i].as_uuid(),
+                    "task_id": task_id.as_uuid(),
                     "duration_ms": 1000
                 }),
             );

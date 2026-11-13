@@ -29,6 +29,8 @@ impl AuthInterceptor {
     }
 
     /// Intercept a gRPC request and add authentication headers
+    // tonic's interceptor shape: the error is the `Status` the call fails with.
+    #[allow(clippy::result_large_err)]
     pub fn call<T>(&self, mut request: Request<T>) -> Result<Request<T>, Status> {
         if let Some(token) = &self.token {
             request.metadata_mut().insert(
@@ -65,6 +67,8 @@ impl TracingInterceptor {
     }
 
     /// Intercept a gRPC request and add tracing headers
+    // tonic's interceptor shape: the error is the `Status` the call fails with.
+    #[allow(clippy::result_large_err)]
     pub fn call<T>(&self, mut request: Request<T>) -> Result<Request<T>, Status> {
         let trace_id = self
             .trace_id
@@ -103,6 +107,8 @@ impl MetricsInterceptor {
     }
 
     /// Intercept a gRPC request and record metrics
+    // tonic's interceptor shape: the error is the `Status` the call fails with.
+    #[allow(clippy::result_large_err)]
     pub fn call<T>(&self, request: Request<T>) -> Result<Request<T>, Status> {
         if self.enabled {
             // In a real implementation, this would record metrics

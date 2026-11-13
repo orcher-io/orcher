@@ -420,8 +420,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_scheduler_health_check_scheduling_drift() {
-        let mut config = SchedulerHealthCheckConfig::default();
-        config.max_scheduling_drift_seconds = 30;
+        let config = SchedulerHealthCheckConfig {
+            max_scheduling_drift_seconds: 30,
+            ..Default::default()
+        };
 
         let check = SchedulerHealthCheck::with_config("test_scheduler", config);
         check.set_scheduler_running(true);

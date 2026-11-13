@@ -260,7 +260,7 @@ impl WorkPrefetchBuffer {
 
     pub fn is_refilling(&self, key: &PrefetchKey) -> bool {
         self.buffers
-            .get(&key)
+            .get(key)
             .map(|b| b.is_refilling())
             .unwrap_or(false)
     }

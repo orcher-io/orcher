@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::schema::types::execution::WorkflowExecution;
 use crate::sharding::pool_routing::ShardPoolResolver;
-use crate::sharding::{shard_predicate, ClaimBounds, ClaimScope, WriteFence};
+use crate::sharding::{shard_predicate, ClaimBounds, ClaimParams, ClaimScope, WriteFence};
 use crate::stale_plan::retry_on_stale_plan;
 
 /// Claim-time release routing, shared by every path that can claim work.
@@ -1282,7 +1282,7 @@ impl WorkflowExecutionRepository {
     }
 
     /// Bind values for this poll's shard filter, or all-`None` to run unfiltered.
-    fn claim_bounds(&self) -> (Option<Vec<i32>>, Option<Vec<i32>>, Option<i32>, Option<i32>) {
+    fn claim_bounds(&self) -> ClaimParams {
         ClaimBounds::params(ClaimBounds::for_poll(self.claim_scope.get()).as_ref())
     }
 
@@ -1290,7 +1290,7 @@ impl WorkflowExecutionRepository {
     /// all-`None` when there is no scope or ownership is unknown. For the
     /// retry passes: a retry writes under the fence, so on a node that does not
     /// own the run it could only be refused.
-    fn owned_bounds(&self) -> (Option<Vec<i32>>, Option<Vec<i32>>, Option<i32>, Option<i32>) {
+    fn owned_bounds(&self) -> ClaimParams {
         ClaimBounds::params(ClaimBounds::for_owned(self.claim_scope.get()).as_ref())
     }
 
@@ -2468,6 +2468,7 @@ impl WorkflowExecutionRepository {
     ///
     /// `Ok(true)` when the run was completed, `Ok(false)` when it had already
     /// ended and was left as it was; an error if the update fails.
+    #[allow(clippy::too_many_arguments)]
     pub async fn complete_workflow_atomic(
         &self,
         workflow_id: &str,
@@ -3423,18 +3424,9 @@ impl WorkflowExecutionRepository {
         // `execution_id IN (…)` and gets overwritten, losing its result. Repeating
         // it in the outer WHERE means the re-check sees the new status and skips
         // the row. Same lesson as the cancel path: decide it in the UPDATE.
-        let mut query = String::from(
-            // Namespace names are unique per organisation, not per deployment:
-            // every tenant has a "default". Scoping this by name alone let one
-            // batch call cancel or terminate every tenant's running work.
-            //
-            // The predicate is the one single cancel and terminate use, so a
-            // batch ends exactly what they would: not a replaced run, and a
-            // failure with its retry scheduled — whose retry it also removes.
-            format!(
+        let mut query = format!(
                 "UPDATE workflow_executions SET status = $1, completed_at = COALESCE($2, completed_at), next_retry_at = NULL, updated_at = NOW() WHERE {STILL_LIVE} AND execution_id IN (SELECT execution_id FROM workflow_executions WHERE namespace = $3 AND ($4::uuid IS NULL OR organization_id = $4) AND {STILL_LIVE}"
-            ),
-        );
+            );
         let mut bind_index = 5;
 
         if filter_status.is_some() {
@@ -4879,6 +4871,7 @@ impl WorkflowExecutionRepository {
     ///     // Process or distribute to workers
     /// }
     /// ```
+    #[allow(clippy::too_many_arguments)]
     pub async fn claim_batch(
         &self,
         task_queue: &str,

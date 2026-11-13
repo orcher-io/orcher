@@ -376,7 +376,7 @@ mod tests {
 
         assert_eq!(options.stream_id, Some(stream_id));
         assert_eq!(options.batch_size, 500);
-        assert_eq!(options.continue_on_error, true);
+        assert!(options.continue_on_error);
         assert_eq!(options.max_events, Some(1000));
     }
 
@@ -384,8 +384,8 @@ mod tests {
     fn test_replay_options_defaults() {
         let options = ReplayOptions::default();
         assert_eq!(options.batch_size, 1000);
-        assert_eq!(options.continue_on_error, false);
-        assert_eq!(options.use_snapshots, true);
+        assert!(!options.continue_on_error);
+        assert!(options.use_snapshots);
     }
 
     #[test]

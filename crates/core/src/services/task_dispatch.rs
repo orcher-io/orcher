@@ -278,14 +278,6 @@ impl TaskDispatchService {
         Ok(())
     }
 
-    /// Dispatch an activity task execution
-    ///
-    /// This handles `DispatchTask` tasks by:
-    /// 1. Pushing to Redis task queue (if available)
-    /// 2. Notifying PostgreSQL pollers
-    ///
-    /// # Arguments
-    /// * `task` - The outbox task containing activity task dispatch information
     /// Transfer a `DispatchTask` outbox row into its `(namespace, task_queue)` matching
     /// partition — the emitter side of the matching layer. The partition key comes from
     /// the payload; enqueue is idempotent on `task_id`. Then wake any worker parked on
@@ -515,20 +507,6 @@ impl TaskDispatchService {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[tokio::test]
-    async fn test_dispatch_workflow_step_without_redis() {
-        // This is a placeholder test - in a real implementation you'd use mocks
-        // For now, this ensures the code compiles
-        assert!(true);
-    }
-
-    #[tokio::test]
-    async fn test_dispatch_activity_task_without_redis() {
-        // This is a placeholder test - in a real implementation you'd use mocks
-        // For now, this ensures the code compiles
-        assert!(true);
-    }
 
     #[test]
     fn test_task_dispatch_service_construction() {

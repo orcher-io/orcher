@@ -219,11 +219,9 @@ impl BatchProcessor {
 
         let op_type = job.operation_type.clone();
         let rate_limit = job.rate_limit_per_second as u64;
-        let delay = if rate_limit > 0 {
-            Duration::from_millis(1000 / rate_limit)
-        } else {
-            Duration::from_millis(20)
-        };
+        let delay = 1000u64
+            .checked_div(rate_limit)
+            .map_or(Duration::from_millis(20), Duration::from_millis);
 
         // Count matching workflows
         let total = self.count_matching_workflows(&job).await?;

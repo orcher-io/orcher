@@ -547,7 +547,7 @@ mod tests {
 
     #[test]
     fn test_db_pool_monitor_health_check() {
-        let monitor = DbPoolMonitor::new(|| DbPoolMetrics::default());
+        let monitor = DbPoolMonitor::new(DbPoolMetrics::default);
 
         assert_eq!(monitor.seconds_since_last_health_check(), 0);
 

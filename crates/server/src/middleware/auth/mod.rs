@@ -43,13 +43,7 @@ pub async fn require_authentication(mut request: Request, next: Next) -> Respons
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
-        .and_then(|auth| {
-            if auth.starts_with("Bearer ") {
-                Some(&auth[7..])
-            } else {
-                None
-            }
-        });
+        .and_then(|auth| auth.strip_prefix("Bearer "));
 
     if let Some(token_str) = token {
         match state.auth_provider().authenticate(token_str).await {

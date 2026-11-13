@@ -16,6 +16,9 @@
 //! cargo test -p orcher-core --test workflow_sent_event -- --ignored --test-threads=1
 //! ```
 
+// Helpers return `tonic::Status`, the error the engine's gRPC services answer with.
+#![allow(clippy::result_large_err)]
+
 use std::sync::Arc;
 
 use base64::Engine as _;

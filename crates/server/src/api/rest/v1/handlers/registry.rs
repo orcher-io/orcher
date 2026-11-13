@@ -199,13 +199,3 @@ pub async fn health_check() -> Result<Response> {
     )
         .into_response())
 }
-
-#[cfg(test)]
-mod tests {
-
-    #[test]
-    fn test_module_compiles() {
-        // Smoke test to ensure module compiles
-        assert!(true);
-    }
-}

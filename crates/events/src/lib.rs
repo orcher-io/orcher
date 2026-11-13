@@ -122,9 +122,4 @@ mod tests {
         assert!(!VERSION.is_empty());
         assert_eq!(CRATE_NAME, "orcher-events");
     }
-
-    #[test]
-    fn test_crate_compiles() {
-        assert!(true);
-    }
 }

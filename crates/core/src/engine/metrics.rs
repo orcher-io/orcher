@@ -468,10 +468,10 @@ mod tests {
         let exporter = PrometheusExporter::new();
         let mut output = String::new();
 
-        exporter.write_gauge(&mut output, "test_gauge", "Test gauge", 3.14);
+        exporter.write_gauge(&mut output, "test_gauge", "Test gauge", 2.5);
 
         assert!(output.contains("# HELP orcher_test_gauge Test gauge"));
         assert!(output.contains("# TYPE orcher_test_gauge gauge"));
-        assert!(output.contains("orcher_test_gauge 3.14"));
+        assert!(output.contains("orcher_test_gauge 2.5"));
     }
 }

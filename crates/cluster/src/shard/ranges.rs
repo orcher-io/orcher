@@ -162,12 +162,12 @@ pub fn owned_ranges(
 /// `O(live nodes)`. This is a point lookup on cold paths (routing a request to
 /// its owner, deciding whether to acquire a shard); the hot claim path uses
 /// `owned_ranges` once per poll, not this.
-pub fn range_owner<'a>(
+pub fn range_owner(
     shard: ShardId,
-    nodes: &'a [NodeId],
+    nodes: &[NodeId],
     vshards: u32,
     n_pools: usize,
-) -> Option<&'a NodeId> {
+) -> Option<&NodeId> {
     nodes.iter().find(|n| {
         owned_ranges(n, nodes, vshards, n_pools)
             .iter()

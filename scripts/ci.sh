@@ -60,13 +60,14 @@ run_check() {
     return 1
   fi
   rm -f "$log"
-  # Only the lints for a lock held across an .await, which compile cleanly and
-  # hang a runtime thread under load; clippy.toml adds DashMap's guards to them.
-  # Code inside macro expansions (async_trait service methods among them) is
-  # outside clippy's reach, which is why the engine's completion notifier keeps
-  # its map private instead of trusting this alone.
-  step "locks held across .await"
-  cargo clippy --workspace --all-targets --locked -- -A warnings -A clippy::all \
+  # Clippy's default lints, as errors. Named among them, the lints for a lock
+  # held across an .await, which compile cleanly and hang a runtime thread
+  # under load; clippy.toml adds DashMap's guards to them. Code inside macro
+  # expansions (async_trait service methods among them) is outside clippy's
+  # reach, which is why the engine's completion notifier keeps its map private
+  # instead of trusting this alone.
+  step "clippy (deny warnings)"
+  cargo clippy --workspace --all-targets --locked -- -D warnings \
     -D clippy::await_holding_lock -D clippy::await_holding_refcell_ref \
     -D clippy::await_holding_invalid_type
   # Single-threaded: a handful of unit tests mutate process environment

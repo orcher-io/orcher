@@ -211,12 +211,7 @@ impl PaginationQuery {
         if self.page < 1 {
             self.page = 1;
         }
-        if self.limit < 1 {
-            self.limit = 1;
-        }
-        if self.limit > 100 {
-            self.limit = 100;
-        }
+        self.limit = self.limit.clamp(1, 100);
     }
 
     /// Calculate the offset for database queries
@@ -231,12 +226,7 @@ impl CursorPaginationQuery {
     ///
     /// Ensures limit is between 1 and 100.
     pub fn validate(&mut self) {
-        if self.limit < 1 {
-            self.limit = 1;
-        }
-        if self.limit > 100 {
-            self.limit = 100;
-        }
+        self.limit = self.limit.clamp(1, 100);
     }
 }
 
