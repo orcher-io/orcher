@@ -532,6 +532,56 @@ async fn a_task_scheduled_after_the_request_still_runs() {
     engine.cleanup(id).await;
 }
 
+/// A task is scheduled by the database's clock, the one the request is
+/// timed by. Scheduled by the engine's, a cleanup scheduled just after the
+/// request looked scheduled before it wherever the engine's clock was behind
+/// the database's, and was refused its start (#26). Inside one transaction
+/// the database's time is fixed, so the stamp equals it exactly; no other
+/// clock does.
+#[tokio::test]
+#[ignore] // Requires PostgreSQL
+async fn a_task_is_scheduled_by_the_database_clock() {
+    let engine = Engine::new().await;
+    let (id, execution_id) = engine.parked_workflow().await;
+
+    let mut tx = engine.pool.begin().await.expect("begin");
+    let (database_now,): (orcher_common::types::time::Timestamptz,) =
+        sqlx::query_as("SELECT NOW()")
+            .fetch_one(&mut *tx)
+            .await
+            .expect("read the database's time");
+    let task = engine
+        .tasks
+        .create_scheduled_once_in_tx(
+            &mut tx,
+            "refund_0".to_string(),
+            "TaskType".to_string(),
+            WorkflowId::from_uuid(id),
+            ExecutionId::from_uuid(Uuid::parse_str(&execution_id).unwrap()),
+            TASK_QUEUE.to_string(),
+            NAMESPACE.to_string(),
+            1,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("schedule the task")
+        .expect("scheduled once");
+    tx.commit().await.expect("commit");
+
+    assert_eq!(
+        task.scheduled_at, database_now,
+        "the task was not scheduled by the database's clock"
+    );
+
+    engine.cleanup(id).await;
+}
+
 /// The heartbeat stops a task scheduled before the request even when it
 /// started after it: one an engine without the start's refusal handed out.
 #[tokio::test]
