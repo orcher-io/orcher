@@ -2430,7 +2430,7 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "orcher-cluster"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "async-trait",
  "orcher-storage",
@@ -2441,7 +2441,7 @@ dependencies = [
 
 [[package]]
 name = "orcher-common"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2458,7 +2458,7 @@ dependencies = [
 
 [[package]]
 name = "orcher-config"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "orcher-common",
  "serde",
@@ -2468,7 +2468,7 @@ dependencies = [
 
 [[package]]
 name = "orcher-core"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -2512,7 +2512,7 @@ dependencies = [
 
 [[package]]
 name = "orcher-dispatch"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "async-trait",
  "dashmap 5.5.3",
@@ -2533,7 +2533,7 @@ dependencies = [
 
 [[package]]
 name = "orcher-events"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2551,7 +2551,7 @@ dependencies = [
 
 [[package]]
 name = "orcher-monitoring"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "async-trait",
  "futures",
@@ -2578,7 +2578,7 @@ dependencies = [
 
 [[package]]
 name = "orcher-orchestrator"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "anyhow",
  "axum 0.7.9",
@@ -2625,7 +2625,7 @@ dependencies = [
 
 [[package]]
 name = "orcher-server"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -2660,7 +2660,7 @@ dependencies = [
 
 [[package]]
 name = "orcher-storage"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "async-trait",
  "chrono",
