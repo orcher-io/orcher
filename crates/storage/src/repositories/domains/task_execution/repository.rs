@@ -112,31 +112,49 @@ impl From<TaskExecutionRow> for TaskExecution {
 
 /// Whether the task row aliased `t` is work its workflow's cancellation
 /// stops: the workflow was cancelled or terminated, or was asked to cancel
-/// after the task was first scheduled.
+/// and the task is not cleanup the workflow scheduled in answer.
 ///
-/// First scheduled is the earliest `scheduled_at` over the task's attempts,
-/// so a retry written after the request is still the work the request
-/// interrupted. Work the workflow schedules after the request — the cleanup
-/// in its cancellation handler — is not stopped, and neither is anything when
-/// no request was made. Deciding by when a task started instead let a task
-/// that was queued when the request came start afterwards and run to the end
-/// as if it were cleanup.
+/// A task is judged by its first attempt, so a retry written after the
+/// request is still the work the request interrupted. That attempt records
+/// where in its journal the activation that scheduled it read to (V088). The
+/// activation carried the journal up to there and no further, so it had seen
+/// the request exactly when the request's journal entry is at or before that
+/// point: its tasks are cleanup, run as the workflow's cancellation handler
+/// meant them to. An activation that had not seen it was carrying on as if
+/// nothing had been asked, and its tasks are stopped — including one handed
+/// out before the request and answered after it, whose tasks are scheduled
+/// after the request but are not cleanup. A request recorded but not yet
+/// journaled has been seen by no activation.
 ///
-/// Both times are the database's: the request is stamped with `NOW()` and so
-/// is a task's `scheduled_at` when it is inserted, so the two compare on one
-/// clock however far the engine's own drifts from it.
+/// A first attempt with no recorded position (written before V088, or by an
+/// activation whose claim recorded none) is judged by time instead, as every
+/// task was before: it is stopped when the request came after it was first
+/// scheduled, the earliest `scheduled_at` over its attempts. Both times are
+/// the database's: the request is stamped with `NOW()` and so is a task's
+/// `scheduled_at` when it is inserted.
 ///
 /// One rule for every place that asks: the heartbeat that tells a running
 /// task to stop, the start that refuses a queued one, the retry that is not
 /// scheduled, and the sweep that ends a queued one. A task's rows live on its
-/// workflow's shard, so the workflow row is on the same database.
+/// workflow's shard, so the workflow row and its journal are on the same
+/// database.
 const STOPPED_BY_CANCELLATION: &str = "EXISTS (\
     SELECT 1 FROM workflow_executions w \
     WHERE w.id = t.workflow_id \
       AND (w.status IN ('cancelled', 'terminated') \
-           OR w.cancel_requested_at > ( \
-                SELECT MIN(f.scheduled_at) FROM task_executions f \
-                WHERE f.workflow_id = t.workflow_id AND f.task_id = t.task_id)))";
+           OR (w.cancel_requested_at IS NOT NULL AND COALESCE( \
+                (SELECT NOT EXISTS ( \
+                        SELECT 1 FROM workflow_execution_journal j \
+                        WHERE j.execution_id = w.execution_id \
+                          AND j.event_type = 'WorkflowExecutionCancelRequested' \
+                          AND j.event_id <= f.scheduled_through_entry) \
+                 FROM task_executions f \
+                 WHERE f.workflow_id = t.workflow_id AND f.task_id = t.task_id \
+                   AND f.scheduled_through_entry IS NOT NULL \
+                 ORDER BY f.attempt_number LIMIT 1), \
+                w.cancel_requested_at > ( \
+                    SELECT MIN(f.scheduled_at) FROM task_executions f \
+                    WHERE f.workflow_id = t.workflow_id AND f.task_id = t.task_id)))))";
 
 /// The outbox row that delivers attempt `s` of a task to a worker, found by
 /// the key the coordinator gives it (`WorkflowCoordinator::task_dispatch_key`)
@@ -516,7 +534,8 @@ impl TaskExecutionRepository {
                 task_queue, namespace, attempt_number, status, scheduled_at,
                 schedule_to_start_timeout_secs, start_to_close_timeout_secs,
                 heartbeat_timeout_secs, input, retry_policy, headers, metadata,
-                created_at, updated_at, shard_id, scheduled_by_command, organization_id
+                created_at, updated_at, shard_id, scheduled_by_command, organization_id,
+                scheduled_through_entry
             )
             -- A task belongs to its workflow's organization. Recorded here, it
             -- is what the task's dispatch is stamped with, so the claims that
@@ -528,7 +547,16 @@ impl TaskExecutionRepository {
             -- engine clock behind the database's made the workflow's cleanup,
             -- scheduled after the request, look scheduled before it.
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                    (SELECT organization_id FROM workflow_executions WHERE execution_id = $5::text))
+                    (SELECT organization_id FROM workflow_executions WHERE execution_id = $5::text),
+                    -- Scheduled by a command: where in its journal the
+                    -- activation that sent it read to (V088), which is what
+                    -- the run's claim records while its completion is applied
+                    -- under the activation fence, so no newer claim can have
+                    -- moved it. Any other insert has no activation behind it.
+                    CASE WHEN $20 THEN
+                        (SELECT claimed_through_entry FROM workflow_executions
+                         WHERE execution_id = $5::text)
+                    END)
             ON CONFLICT (execution_id, task_id, attempt_number) WHERE scheduled_by_command
             DO NOTHING
             RETURNING id, organization_id, task_id, task_type, workflow_id, execution_id,

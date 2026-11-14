@@ -449,6 +449,12 @@ pub mod sql {
         /// last completed activation read to.
         pub const V087_ACTIVATION_JOURNAL_POSITION: &str =
             include_str!("sql/postgres/V087__activation_journal_position.sql");
+
+        /// V088 — `task_executions.scheduled_through_entry`: where in its
+        /// journal the activation that scheduled a task read to, so a
+        /// cancellation stops the tasks scheduled without having seen it.
+        pub const V088_TASK_SCHEDULED_THROUGH_ENTRY: &str =
+            include_str!("sql/postgres/V088__task_scheduled_through_entry.sql");
     }
 }
 
