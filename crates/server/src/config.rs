@@ -61,39 +61,40 @@ impl OrchestratorConfig {
     ///
     /// Returns an error if required environment variables are invalid
     pub fn from_env() -> Result<Self> {
-        let endpoint = std::env::var("ORCHESTRATOR_ENDPOINT")
-            .unwrap_or_else(|_| "http://localhost:50051".to_string());
+        Self::from_vars(|name| std::env::var(name).ok())
+    }
 
-        let namespace =
-            std::env::var("ORCHESTRATOR_NAMESPACE").unwrap_or_else(|_| "default".to_string());
+    /// Read the configuration through `var`, which returns a variable's value
+    /// or `None` when it is unset. `from_env` passes the process environment;
+    /// tests pass their own values, since the process environment is shared by
+    /// every test running at once.
+    fn from_vars(var: impl Fn(&str) -> Option<String>) -> Result<Self> {
+        let endpoint =
+            var("ORCHESTRATOR_ENDPOINT").unwrap_or_else(|| "http://localhost:50051".to_string());
 
-        let connect_timeout_secs = std::env::var("ORCHESTRATOR_CONNECT_TIMEOUT")
-            .ok()
+        let namespace = var("ORCHESTRATOR_NAMESPACE").unwrap_or_else(|| "default".to_string());
+
+        let connect_timeout_secs = var("ORCHESTRATOR_CONNECT_TIMEOUT")
             .and_then(|s| s.parse().ok())
             .unwrap_or(5);
 
-        let request_timeout_secs = std::env::var("ORCHESTRATOR_REQUEST_TIMEOUT")
-            .ok()
+        let request_timeout_secs = var("ORCHESTRATOR_REQUEST_TIMEOUT")
             .and_then(|s| s.parse().ok())
             .unwrap_or(30);
 
-        let max_retries = std::env::var("ORCHESTRATOR_MAX_RETRIES")
-            .ok()
+        let max_retries = var("ORCHESTRATOR_MAX_RETRIES")
             .and_then(|s| s.parse().ok())
             .unwrap_or(3);
 
-        let retry_delay_ms = std::env::var("ORCHESTRATOR_RETRY_DELAY_MS")
-            .ok()
+        let retry_delay_ms = var("ORCHESTRATOR_RETRY_DELAY_MS")
             .and_then(|s| s.parse().ok())
             .unwrap_or(1000);
 
-        let circuit_breaker_threshold = std::env::var("ORCHESTRATOR_CIRCUIT_BREAKER_THRESHOLD")
-            .ok()
+        let circuit_breaker_threshold = var("ORCHESTRATOR_CIRCUIT_BREAKER_THRESHOLD")
             .and_then(|s| s.parse().ok())
             .unwrap_or(5);
 
-        let circuit_breaker_timeout_secs = std::env::var("ORCHESTRATOR_CIRCUIT_BREAKER_TIMEOUT")
-            .ok()
+        let circuit_breaker_timeout_secs = var("ORCHESTRATOR_CIRCUIT_BREAKER_TIMEOUT")
             .and_then(|s| s.parse().ok())
             .unwrap_or(60);
 
@@ -234,31 +235,37 @@ mod tests {
         assert!(config.validate().is_err());
     }
 
+    /// A lookup over `pairs`, standing in for the process environment.
+    fn vars(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
+        let pairs: Vec<(String, String)> = pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        move |name| {
+            pairs
+                .iter()
+                .find(|(k, _)| k == name)
+                .map(|(_, v)| v.clone())
+        }
+    }
+
     #[test]
     fn test_from_env_with_defaults() {
-        // Clear environment variables
-        std::env::remove_var("ORCHESTRATOR_ENDPOINT");
-        std::env::remove_var("ORCHESTRATOR_CONNECT_TIMEOUT");
-
-        let config = OrchestratorConfig::from_env().unwrap();
+        let config = OrchestratorConfig::from_vars(vars(&[])).unwrap();
         assert_eq!(config.endpoint, "http://localhost:50051");
         assert_eq!(config.connect_timeout, Duration::from_secs(5));
     }
 
     #[test]
     fn test_from_env_with_custom_values() {
-        std::env::set_var("ORCHESTRATOR_ENDPOINT", "http://orchestrator:50051");
-        std::env::set_var("ORCHESTRATOR_CONNECT_TIMEOUT", "10");
-        std::env::set_var("ORCHESTRATOR_MAX_RETRIES", "5");
-
-        let config = OrchestratorConfig::from_env().unwrap();
+        let config = OrchestratorConfig::from_vars(vars(&[
+            ("ORCHESTRATOR_ENDPOINT", "http://orchestrator:50051"),
+            ("ORCHESTRATOR_CONNECT_TIMEOUT", "10"),
+            ("ORCHESTRATOR_MAX_RETRIES", "5"),
+        ]))
+        .unwrap();
         assert_eq!(config.endpoint, "http://orchestrator:50051");
         assert_eq!(config.connect_timeout, Duration::from_secs(10));
         assert_eq!(config.max_retries, 5);
-
-        // Cleanup
-        std::env::remove_var("ORCHESTRATOR_ENDPOINT");
-        std::env::remove_var("ORCHESTRATOR_CONNECT_TIMEOUT");
-        std::env::remove_var("ORCHESTRATOR_MAX_RETRIES");
     }
 }

@@ -139,10 +139,18 @@ impl FeatureFlags {
     /// assert!(flags.queue_based_dispatch);
     /// ```
     pub fn from_env() -> Self {
+        Self::from_vars(|name| env::var(name).ok())
+    }
+
+    /// Read the flags through `var`, which returns a variable's value or `None`
+    /// when it is unset. `from_env` passes the process environment; tests pass
+    /// their own values, since the process environment is shared by every test
+    /// running at once.
+    fn from_vars(var: impl Fn(&str) -> Option<String>) -> Self {
         let mut flags = Self::default();
 
         // Queue-based dispatch
-        if let Ok(value) = env::var("ORCHER_QUEUE_DISPATCH") {
+        if let Some(value) = var("ORCHER_QUEUE_DISPATCH") {
             flags.queue_based_dispatch = parse_bool(&value);
             debug!(
                 queue_dispatch = flags.queue_based_dispatch,
@@ -151,7 +159,7 @@ impl FeatureFlags {
         }
 
         // Queue provider
-        if let Ok(provider) = env::var("ORCHER_QUEUE_PROVIDER") {
+        if let Some(provider) = var("ORCHER_QUEUE_PROVIDER") {
             let provider = provider.trim().to_lowercase();
             if !provider.is_empty() {
                 flags.queue_provider = Some(provider.clone());
@@ -160,7 +168,7 @@ impl FeatureFlags {
         }
 
         // Rollback to direct
-        if let Ok(value) = env::var("ORCHER_ROLLBACK_DIRECT") {
+        if let Some(value) = var("ORCHER_ROLLBACK_DIRECT") {
             flags.rollback_to_direct = parse_bool(&value);
             if flags.rollback_to_direct {
                 warn!("ROLLBACK TO DIRECT DISPATCH ENABLED - Queue dispatch will be bypassed");
@@ -168,7 +176,7 @@ impl FeatureFlags {
         }
 
         // Dispatch strategy
-        if let Ok(strategy) = env::var("ORCHER_DISPATCH_STRATEGY") {
+        if let Some(strategy) = var("ORCHER_DISPATCH_STRATEGY") {
             match DispatchStrategy::from_str(&strategy) {
                 Ok(s) => {
                     flags.dispatch_strategy = Some(s);
@@ -185,7 +193,7 @@ impl FeatureFlags {
         }
 
         // Experimental features
-        if let Ok(value) = env::var("ORCHER_EXPERIMENTAL") {
+        if let Some(value) = var("ORCHER_EXPERIMENTAL") {
             flags.experimental = parse_bool(&value);
             if flags.experimental {
                 info!("Experimental features enabled");
@@ -193,7 +201,7 @@ impl FeatureFlags {
         }
 
         // Debug tracing
-        if let Ok(value) = env::var("ORCHER_DEBUG_TRACING") {
+        if let Some(value) = var("ORCHER_DEBUG_TRACING") {
             flags.debug_tracing = parse_bool(&value);
             if flags.debug_tracing {
                 info!("Debug tracing enabled");
@@ -201,7 +209,7 @@ impl FeatureFlags {
         }
 
         // Circuit breaker
-        if let Ok(value) = env::var("ORCHER_QUEUE_CIRCUIT_BREAKER") {
+        if let Some(value) = var("ORCHER_QUEUE_CIRCUIT_BREAKER") {
             flags.queue_circuit_breaker = parse_bool(&value);
             debug!(
                 circuit_breaker = flags.queue_circuit_breaker,
@@ -210,7 +218,7 @@ impl FeatureFlags {
         }
 
         // Max queue depth
-        if let Ok(value) = env::var("ORCHER_MAX_QUEUE_DEPTH") {
+        if let Some(value) = var("ORCHER_MAX_QUEUE_DEPTH") {
             if let Ok(depth) = value.parse::<usize>() {
                 flags.max_queue_depth = Some(depth);
                 debug!(max_depth = depth, "Loaded max queue depth from environment");
@@ -218,7 +226,7 @@ impl FeatureFlags {
         }
 
         // Queue metrics
-        if let Ok(value) = env::var("ORCHER_QUEUE_METRICS") {
+        if let Some(value) = var("ORCHER_QUEUE_METRICS") {
             flags.queue_metrics = parse_bool(&value);
             debug!(
                 metrics = flags.queue_metrics,
@@ -260,8 +268,17 @@ impl FeatureFlags {
     ///
     /// Environment variables take precedence over configuration.
     pub fn merge_with_config(&mut self, config_flags: &FeatureFlags) {
+        self.merge_with_config_from(config_flags, |name| env::var(name).ok());
+    }
+
+    /// `merge_with_config`, judging which variables are set through `var`.
+    fn merge_with_config_from(
+        &mut self,
+        config_flags: &FeatureFlags,
+        var: impl Fn(&str) -> Option<String>,
+    ) {
         // Only use config values if env var not set
-        if env::var("ORCHER_QUEUE_DISPATCH").is_err() {
+        if var("ORCHER_QUEUE_DISPATCH").is_none() {
             self.queue_based_dispatch = config_flags.queue_based_dispatch;
         }
 
@@ -269,7 +286,7 @@ impl FeatureFlags {
             self.queue_provider = config_flags.queue_provider.clone();
         }
 
-        if env::var("ORCHER_ROLLBACK_DIRECT").is_err() {
+        if var("ORCHER_ROLLBACK_DIRECT").is_none() {
             self.rollback_to_direct = config_flags.rollback_to_direct;
         }
 
@@ -380,7 +397,6 @@ fn parse_bool(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
 
     #[test]
     fn test_default_flags() {
@@ -408,25 +424,27 @@ mod tests {
         assert!(!parse_bool("off"));
     }
 
+    /// A lookup over `pairs`, standing in for the process environment.
+    fn vars(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
+        let pairs: Vec<(String, String)> = pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        move |name| {
+            pairs
+                .iter()
+                .find(|(k, _)| k == name)
+                .map(|(_, v)| v.clone())
+        }
+    }
+
     #[test]
     fn test_from_env() {
-        // Cleanup first to avoid interference from parallel tests
-        env::remove_var("ORCHER_QUEUE_DISPATCH");
-        env::remove_var("ORCHER_QUEUE_PROVIDER");
-        env::remove_var("ORCHER_DISPATCH_STRATEGY");
-        env::remove_var("ORCHER_ROLLBACK_DIRECT");
-        env::remove_var("ORCHER_EXPERIMENTAL");
-
-        env::set_var("ORCHER_QUEUE_DISPATCH", "true");
-        env::set_var("ORCHER_QUEUE_PROVIDER", "redis");
-        env::set_var("ORCHER_DISPATCH_STRATEGY", "hybrid");
-
-        let flags = FeatureFlags::from_env();
-
-        // Cleanup immediately before assertions to minimize interference window
-        env::remove_var("ORCHER_QUEUE_DISPATCH");
-        env::remove_var("ORCHER_QUEUE_PROVIDER");
-        env::remove_var("ORCHER_DISPATCH_STRATEGY");
+        let flags = FeatureFlags::from_vars(vars(&[
+            ("ORCHER_QUEUE_DISPATCH", "true"),
+            ("ORCHER_QUEUE_PROVIDER", "redis"),
+            ("ORCHER_DISPATCH_STRATEGY", "hybrid"),
+        ]));
 
         assert!(flags.queue_based_dispatch);
         assert_eq!(flags.queue_provider, Some("redis".to_string()));
@@ -555,20 +573,32 @@ mod tests {
 
     #[test]
     fn test_merge_with_config() {
-        env::remove_var("ORCHER_QUEUE_DISPATCH");
-        env::remove_var("ORCHER_QUEUE_PROVIDER");
-
-        let mut env_flags = FeatureFlags::from_env();
+        let unset = vars(&[]);
+        let mut env_flags = FeatureFlags::from_vars(&unset);
         let config_flags = FeatureFlags {
             queue_based_dispatch: true,
             queue_provider: Some("redis".to_string()),
             ..Default::default()
         };
 
-        env_flags.merge_with_config(&config_flags);
+        env_flags.merge_with_config_from(&config_flags, &unset);
 
         // Should use config values when env not set
         assert!(env_flags.queue_based_dispatch);
         assert_eq!(env_flags.queue_provider, Some("redis".to_string()));
+    }
+
+    #[test]
+    fn a_set_variable_wins_over_the_config() {
+        let set = vars(&[("ORCHER_QUEUE_DISPATCH", "false")]);
+        let mut env_flags = FeatureFlags::from_vars(&set);
+        let config_flags = FeatureFlags {
+            queue_based_dispatch: true,
+            ..Default::default()
+        };
+
+        env_flags.merge_with_config_from(&config_flags, &set);
+
+        assert!(!env_flags.queue_based_dispatch);
     }
 }
