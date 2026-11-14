@@ -648,18 +648,25 @@ impl PollingManager {
                     match batch_result {
                         Ok(Ok(executions)) if !executions.is_empty() => {
                             // Add to buffer and get first execution
-                            if let Some(execution) =
+                            if let Some(first) =
                                 prefetch.add_batch(&key, &request.identity, executions)
                             {
-                                debug!(
-                                    execution_id = %execution.execution_id,
-                                    workflow_name = %execution.workflow_name,
-                                    "poll_with_postgres: batch claimed, returning first"
-                                );
-
-                                // Convert to poll response
-                                let response = self.deliver(&execution, request).await?;
-                                return Ok(Some(response));
+                                // Handed out as the buffered ones are, so its
+                                // claim names this poller's process.
+                                let execution =
+                                    match self.hand_out(prefetch, &key, first, request).await? {
+                                        Ok(execution) => Some(execution),
+                                        Err(_) => self.take_prefetched(prefetch, request).await?,
+                                    };
+                                if let Some(execution) = execution {
+                                    debug!(
+                                        execution_id = %execution.execution_id,
+                                        workflow_name = %execution.workflow_name,
+                                        "poll_with_postgres: batch claimed, returning first"
+                                    );
+                                    let response = self.deliver(&execution, request).await?;
+                                    return Ok(Some(response));
+                                }
                             }
                         }
                         Ok(Ok(_)) => {
@@ -1076,46 +1083,76 @@ impl PollingManager {
         prefetch: &orcher_dispatch::polling::prefetch::WorkPrefetchBuffer,
         request: &PollExecutionRequest,
     ) -> OrcherResult<Option<orcher_storage::schema::types::execution::WorkflowExecution>> {
-        let identity = request.identity.as_str();
         let key = prefetch_key(request);
         while let Some(execution) = prefetch.try_get(&key) {
-            // Still claimed while it is handed out. Should that fail, or the
-            // poll be dropped before it finishes, it goes back to the buffer
-            // for the next poll: dropped, it would stay claimed by nobody
-            // until the claim timed out.
-            let held = Unhanded {
-                prefetch,
-                key: &key,
-                execution: Some(execution),
-            };
-            let execution = held.execution.as_ref().expect("held until handed out");
-            let handed = self
-                .claimer
-                .hand_to(
-                    &execution.execution_id,
-                    execution.activation_seq,
-                    identity,
-                    request.organization_id,
-                    claimant_instance(request),
-                )
-                .await?;
-            match handed {
-                HandOut::Handed => {
-                    let mut execution = held.taken();
-                    execution.claimed_by = Some(identity.to_string());
-                    return Ok(Some(execution));
-                }
-                // A completion of it is being applied. Still claimed for the
-                // buffer: `held` puts it back for the next poll, which finds
-                // the completion done. Not offered again to this poll, which
-                // would only find it busy again.
-                HandOut::Busy => return Ok(None),
-                // Its claim lapsed in the buffer and was taken back: not
-                // ours to hand out.
-                HandOut::Gone => drop(held.taken()),
+            match self.hand_out(prefetch, &key, execution, request).await? {
+                Ok(execution) => return Ok(Some(execution)),
+                // A completion of it is being applied: back in the buffer for
+                // the next poll, which finds the completion done. Not offered
+                // again to this poll, which would only find it busy again.
+                Err(HandOut::Busy) => return Ok(None),
+                // Its claim lapsed in the buffer and was taken back.
+                Err(_) => continue,
             }
         }
         Ok(None)
+    }
+
+    /// Hand `execution`, claimed for the prefetch buffer under `key`, to the
+    /// poller of `request`: the claim is moved to that poller and the process
+    /// it belongs to, as [`take_prefetched`](Self::take_prefetched) explains.
+    /// Why not, if it could not be handed out: [`HandOut::Busy`] puts it back
+    /// in the buffer, still claimed for it, and [`HandOut::Gone`] drops it.
+    ///
+    /// The first execution of a batch is handed out here too, to the poller
+    /// whose claim filled the buffer. Delivered straight from the batch, its
+    /// claim would name no process: the release of a lapsed worker's claims
+    /// would never find it, nor would its resume be held for the process
+    /// that keeps its journal.
+    async fn hand_out(
+        &self,
+        prefetch: &orcher_dispatch::polling::prefetch::WorkPrefetchBuffer,
+        key: &PrefetchKey,
+        execution: orcher_storage::schema::types::execution::WorkflowExecution,
+        request: &PollExecutionRequest,
+    ) -> OrcherResult<Result<orcher_storage::schema::types::execution::WorkflowExecution, HandOut>>
+    {
+        let identity = request.identity.as_str();
+        // Still claimed while it is handed out. Should that fail, or the poll
+        // be dropped before it finishes, it goes back to the buffer for the
+        // next poll: dropped, it would stay claimed by nobody until the claim
+        // timed out.
+        let held = Unhanded {
+            prefetch,
+            key,
+            execution: Some(execution),
+        };
+        let execution = held.execution.as_ref().expect("held until handed out");
+        let handed = self
+            .claimer
+            .hand_to(
+                &execution.execution_id,
+                execution.activation_seq,
+                identity,
+                request.organization_id,
+                claimant_instance(request),
+            )
+            .await?;
+        match handed {
+            HandOut::Handed => {
+                let mut execution = held.taken();
+                execution.claimed_by = Some(identity.to_string());
+                Ok(Ok(execution))
+            }
+            // A completion of it is being applied: `held` puts it back.
+            HandOut::Busy => Ok(Err(HandOut::Busy)),
+            // Its claim lapsed in the buffer and was taken back: not ours to
+            // hand out.
+            HandOut::Gone => {
+                drop(held.taken());
+                Ok(Err(HandOut::Gone))
+            }
+        }
     }
 
     /// Release the claims sitting in the prefetch buffer, as the engine shuts

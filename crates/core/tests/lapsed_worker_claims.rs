@@ -111,13 +111,16 @@ impl Engine {
 }
 
 async fn engine(pool: &PgPool, shards: Option<Vec<PgPool>>) -> Engine {
-    engine_with(pool, shards, None).await
+    engine_with(pool, shards, None, false).await
 }
 
+/// `prefetch`: polls claim in batches and hand the rest out from a buffer, as
+/// the engine does by default.
 async fn engine_with(
     pool: &PgPool,
     shards: Option<Vec<PgPool>>,
     matching: Option<Arc<PgMatchingStore>>,
+    prefetch: bool,
 ) -> Engine {
     let journal_repo = Arc::new(JournalRepository::new(pool.clone()));
     let journal_service = Arc::new(JournalService::new(journal_repo.clone()));
@@ -145,11 +148,13 @@ async fn engine_with(
             pool.clone(),
         )),
     ));
-    let polling_manager = Arc::new(PollingManager::new(
-        exec_repo.clone(),
-        journal_repo.clone(),
-        CLAIM_TIMEOUT_SECS,
-    ));
+    let polling_manager =
+        PollingManager::new(exec_repo.clone(), journal_repo.clone(), CLAIM_TIMEOUT_SECS);
+    let polling_manager = Arc::new(if prefetch {
+        polling_manager.with_prefetch(orcher_dispatch::polling::PrefetchConfig::default())
+    } else {
+        polling_manager
+    });
     let coordinator = Arc::new(
         WorkflowCoordinator::new(
             Arc::new(pool.clone()),
@@ -597,6 +602,50 @@ async fn a_dead_workers_activation_goes_to_another_worker_within_seconds() {
     cleanup(&pool, &[id, parked], &[&a, &b]).await;
 }
 
+/// As the engine runs by default, with polls claiming in batches: the
+/// activation a batch claim hands straight to the poll that claimed it is
+/// recorded against that poll's process, as one handed out of the buffer is,
+/// and goes to another worker within seconds when that process dies.
+/// Delivered straight from the batch, it named no process, and waited for the
+/// claim timeout.
+#[tokio::test]
+#[ignore] // Requires PostgreSQL
+async fn the_first_activation_of_a_batch_is_released_when_its_worker_dies() {
+    let pool = pool().await;
+    let engine = engine_with(&pool, None, None, true).await;
+    let task_queue = queue();
+    let (id, execution_id) = workflow(&pool, Uuid::new_v4(), &task_queue, None).await;
+    let a = process(None);
+
+    let held = poll(&engine.service, &task_queue, &a, 5).await;
+    assert_eq!(held.execution_id, execution_id);
+    assert_eq!(
+        claim_of(&pool, id).await.1.as_deref(),
+        Some(a.instance.as_str()),
+        "the batch's first activation names the process it went to"
+    );
+    let pollers = keep_polling(engine.service.clone(), task_queue.clone(), a.clone());
+    engine.warmed_up().await;
+    pollers.abort();
+    let killed = Instant::now();
+
+    let b = process(None);
+    let handed = poll(&engine.service, &task_queue, &b, 30).await;
+    let waited = killed.elapsed();
+    assert_eq!(
+        handed.execution_id, execution_id,
+        "the second worker was not handed the dead worker's activation within 30s"
+    );
+    let bound = lapse() + REFRESH * 3;
+    assert!(
+        waited <= bound,
+        "the activation reached the second worker {waited:?} after the first died; \
+         expected within {bound:?}"
+    );
+
+    cleanup(&pool, &[id], &[&a, &b]).await;
+}
+
 /// The dead worker was only cut off, and answers after all. Its activation
 /// was voided when it was released, so its completion is acknowledged and not
 /// applied — before the activation is handed out again, and after — and the
@@ -967,7 +1016,7 @@ async fn attempts(pool: &PgPool, id: Uuid, task_id: &str) -> Vec<(i32, String, O
 async fn a_dead_workers_task_is_retried_and_a_busy_ones_is_not() {
     let pool = pool().await;
     let store = Arc::new(PgMatchingStore::new(pool.clone()));
-    let engine = engine_with(&pool, None, Some(store.clone())).await;
+    let engine = engine_with(&pool, None, Some(store.clone()), false).await;
     let task_queue = queue();
     let (id, execution_id) = workflow(&pool, Uuid::new_v4(), &task_queue, None).await;
     let (dead, busy) = (process(None), process(None));

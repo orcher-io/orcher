@@ -4442,6 +4442,12 @@ impl WorkflowExecutionRepository {
     /// so that the claim that hands an execution to a worker is scoped on
     /// every path, not only the ones that find it.
     ///
+    /// A wake-up deferred while the activation sat in the buffer is kept: the
+    /// activation reads its journal only to where the batch claim placed it
+    /// (`claimed_through_entry`, V087), so the outcome that woke it is not in
+    /// what it is sent, and its completion releases the claim for the
+    /// activation that carries it.
+    ///
     /// `worker_instance_id` is the process the poller belongs to, recorded as
     /// a claim records it.
     pub async fn hand_to(
@@ -4457,8 +4463,7 @@ impl WorkflowExecutionRepository {
             "UPDATE workflow_executions \
              SET claimed_by = $3, claimed_at = NOW(), \
                  claim_timeout_at = NOW() + make_interval(secs => COALESCE(task_timeout_secs, $4)), \
-                 claimed_on_node = $5, claimed_by_instance = $7, \
-                 pending_requeue = FALSE, pending_requeue_at = NULL \
+                 claimed_on_node = $5, claimed_by_instance = $7 \
              WHERE execution_id = $1 AND activation_seq = $2 AND claimed_by IS NOT NULL \
                AND claim_timeout_at > NOW() \
                AND ($6::uuid IS NULL OR organization_id = $6) AND {}",
