@@ -1216,6 +1216,58 @@ async fn a_prefetched_activation_is_claimed_afresh_when_handed_out() {
     cleanup(&pool, id, &execution_id).await;
 }
 
+/// A wake-up that arrives while a prefetched activation waits in the buffer is
+/// kept when the activation is handed out. The activation reads its journal
+/// only to where the batch claim placed it, so it is not sent the outcome that
+/// woke it; its completion releases the claim for the next activation, which
+/// is. Cleared at the hand-out, the workflow stayed parked until its claim
+/// timed out.
+#[tokio::test]
+#[ignore] // Requires PostgreSQL
+async fn a_wake_up_while_buffered_is_kept_through_the_hand_out() {
+    use orcher_storage::repositories::domains::workflow_execution::Resume;
+    let pool = pool().await;
+    let (service, repo) = engine(&pool).await;
+    let (id, execution_id, task_queue) = workflow(&pool).await;
+
+    let refiller = "refiller-wf-driver-poller-0";
+    let taker = "taker-wf-driver-poller-1";
+    let seq = claim(&repo, &task_queue, refiller).await;
+    assert_eq!(
+        repo.release_claim_to_resume(&execution_id).await.unwrap(),
+        Resume::Deferred,
+        "claimed for the buffer, the activation is in flight"
+    );
+
+    assert_eq!(
+        repo.hand_to(&execution_id, seq, taker, 300, None, None)
+            .await
+            .unwrap(),
+        HandOut::Handed
+    );
+    assert_eq!(
+        claim_state(&pool, id).await,
+        (Some(taker.to_string()), true),
+        "handed out, with the wake-up still recorded"
+    );
+
+    // The activation completes without the outcome: the wake-up it missed is
+    // taken, and the workflow is claimable again.
+    service
+        .complete_workflow_execution(Request::new(completion(
+            id,
+            &execution_id,
+            Some(token(&execution_id, seq)),
+            vec![],
+        )))
+        .await
+        .expect("completes");
+    assert_eq!(claim_state(&pool, id).await, (None, false));
+    assert_eq!(claim(&repo, &task_queue, OTHER_WORKER).await, seq + 1);
+
+    cleanup(&pool, id, &execution_id).await;
+}
+
 /// A tokenless completion from a worker whose claim went to another returns
 /// that worker's own permit for the execution, and not the other's.
 #[tokio::test]
