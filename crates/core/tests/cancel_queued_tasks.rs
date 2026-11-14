@@ -211,6 +211,60 @@ impl Engine {
             .expect("schedule the task")
     }
 
+    /// The workflow's activation is claimed now, reading its journal to the
+    /// last entry, as every claim records (V087).
+    async fn claimed(&self, execution_id: &str) {
+        sqlx::query(
+            "UPDATE workflow_executions SET claimed_through_entry = \
+             (SELECT COALESCE(MAX(event_id), 0) FROM workflow_execution_journal \
+              WHERE execution_id = $1) \
+             WHERE execution_id = $1",
+        )
+        .bind(execution_id)
+        .execute(&self.pool)
+        .await
+        .expect("record the claim's journal position");
+    }
+
+    /// The claimed activation's completion schedules `task_id`, as a
+    /// ScheduleTask command does.
+    async fn schedule_by_command(
+        &self,
+        id: Uuid,
+        execution_id: &str,
+        task_id: &str,
+    ) -> TaskExecution {
+        self.tasks
+            .create_scheduled_once(
+                task_id.to_string(),
+                "TaskType".to_string(),
+                WorkflowId::from_uuid(id),
+                ExecutionId::from_uuid(Uuid::parse_str(execution_id).unwrap()),
+                TASK_QUEUE.to_string(),
+                NAMESPACE.to_string(),
+                1,
+                Some(br#"{"order":7}"#.to_vec()),
+                Some(retrying()),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("schedule the task")
+            .expect("scheduled once")
+    }
+
+    /// Where in its journal the activation that scheduled `task` read to.
+    async fn scheduled_through(&self, task: &TaskExecution) -> Option<i64> {
+        sqlx::query_scalar("SELECT scheduled_through_entry FROM task_executions WHERE id = $1")
+            .bind(task.id.as_uuid())
+            .fetch_one(&self.pool)
+            .await
+            .expect("read the task's journal position")
+    }
+
     /// Start `task` as a poll does, returning the token its worker reports
     /// with, or `None` when the start is refused.
     async fn start(&self, task: &TaskExecution) -> Option<Vec<u8>> {
@@ -577,6 +631,96 @@ async fn a_task_is_scheduled_by_the_database_clock() {
     assert_eq!(
         task.scheduled_at, database_now,
         "the task was not scheduled by the database's clock"
+    );
+
+    engine.cleanup(id).await;
+}
+
+/// A task scheduled by an activation that had not seen the request is
+/// interrupted work, though it was scheduled after the request: the
+/// activation was handed out before it and answered after it, carrying on as
+/// if nothing had been asked (#17). Judged by time, it ran as cleanup.
+#[tokio::test]
+#[ignore] // Requires PostgreSQL
+async fn a_task_from_an_activation_that_had_not_seen_the_request_is_stopped() {
+    let engine = Engine::new().await;
+    let (id, execution_id) = engine.parked_workflow().await;
+    engine.claimed(&execution_id).await;
+    engine.request(&execution_id).await;
+
+    let late = engine
+        .schedule_by_command(id, &execution_id, "charge_0")
+        .await;
+    assert!(
+        engine.scheduled_through(&late).await.is_some(),
+        "the task does not record the activation's journal position"
+    );
+
+    assert!(
+        engine.start(&late).await.is_none(),
+        "work the request interrupted was started as cleanup"
+    );
+    watcher(&engine.pool).check_timeouts().await.expect("sweep");
+    assert_eq!(engine.status(late.id).await, "cancelled");
+
+    engine.cleanup(id).await;
+}
+
+/// A request recorded but not yet in the journal has been seen by no
+/// activation, so what one claimed meanwhile schedules is stopped.
+#[tokio::test]
+#[ignore] // Requires PostgreSQL
+async fn a_request_not_yet_journaled_has_been_seen_by_no_activation() {
+    let engine = Engine::new().await;
+    let (id, execution_id) = engine.parked_workflow().await;
+    engine.record_request(&execution_id).await;
+    engine.claimed(&execution_id).await;
+
+    let task = engine
+        .schedule_by_command(id, &execution_id, "charge_0")
+        .await;
+    assert!(
+        engine.start(&task).await.is_none(),
+        "a task scheduled without sight of the request was started"
+    );
+
+    engine.cleanup(id).await;
+}
+
+/// Cleanup scheduled by an activation that had seen the request runs,
+/// whatever the clocks say: here its schedule is placed a minute before the
+/// request, which judged by time made it interrupted work. Its retry runs
+/// too, judged by the first attempt.
+#[tokio::test]
+#[ignore] // Requires PostgreSQL
+async fn cleanup_from_an_activation_that_saw_the_request_runs_whatever_the_clocks_say() {
+    let engine = Engine::new().await;
+    let (id, execution_id) = engine.parked_workflow().await;
+    engine.request(&execution_id).await;
+    engine.claimed(&execution_id).await;
+
+    let cleanup = engine
+        .schedule_by_command(id, &execution_id, "refund_0")
+        .await;
+    engine.scheduled_a_minute_ago(id, "refund_0").await;
+
+    let token = engine
+        .start(&cleanup)
+        .await
+        .expect("the workflow's cleanup was refused its start");
+    assert!(
+        !engine.heartbeat(&token).await,
+        "the cleanup was told to stop"
+    );
+    watcher(&engine.pool).check_timeouts().await.expect("sweep");
+    assert_eq!(engine.status(cleanup.id).await, "started");
+
+    let retry = engine
+        .schedule(id, &execution_id, "refund_0", 2, None)
+        .await;
+    assert!(
+        engine.start(&retry).await.is_some(),
+        "a retry of the cleanup was refused its start"
     );
 
     engine.cleanup(id).await;

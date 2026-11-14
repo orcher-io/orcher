@@ -5936,9 +5936,10 @@ impl ExecutionService {
     /// Whether a running task should stop, from its workflow's state.
     ///
     /// It should when the workflow was cancelled or terminated, and when the
-    /// workflow was asked to cancel after the task was first scheduled: that
-    /// is the work the request interrupts. A task the workflow scheduled after
-    /// the request is its cleanup and runs on. See
+    /// workflow was asked to cancel and the task was scheduled by an
+    /// activation that had not seen the request: that is the work the request
+    /// interrupts. A task scheduled by one that had seen it is the workflow's
+    /// cleanup and runs on. See
     /// [`TaskExecutionRepository::stopped_by_cancellation`]; a failed read
     /// answers no, and the next heartbeat asks again.
     async fn task_should_stop(&self, task: &orcher_storage::schema::types::TaskExecution) -> bool {

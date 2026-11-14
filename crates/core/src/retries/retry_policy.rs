@@ -292,9 +292,9 @@ pub enum DlqReason {
         /// Description of the validation error
         error: String,
     },
-    /// The task's workflow was cancelled, or asked to cancel after the task
-    /// was first scheduled: the work is interrupted, and a retry would only
-    /// run it again
+    /// The task's workflow was cancelled, or asked to cancel and the task is
+    /// not cleanup scheduled in answer: the work is interrupted, and a retry
+    /// would only run it again
     StoppedByCancellation,
     /// The task was pinned to a session whose worker is gone: only that
     /// worker polls the session's queue, so a retry there would never run
