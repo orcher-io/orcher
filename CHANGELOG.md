@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.7.2](https://github.com/orcher-io/orcher/compare/v0.7.1...v0.7.2) (2026-11-14)
+
+
+### Features
+
+* report where the run's last applied activation read its journal to ([65c03fc](https://github.com/orcher-io/orcher/commit/65c03fc200f53cac413595859e82e9ae982a186c))
+
+
+### Bug Fixes
+
+* **common:** write whole microseconds to PostgreSQL exactly ([005e7ed](https://github.com/orcher-io/orcher/commit/005e7ed49aa25e4d20a96e9aa74896639f6944af))
+* **common:** write whole microseconds to PostgreSQL exactly ([41e0889](https://github.com/orcher-io/orcher/commit/41e0889935662fac77e906defca94cde675fff27)), closes [#24](https://github.com/orcher-io/orcher/issues/24)
+* **dispatch:** answer a timed-out claim as UNAVAILABLE, with the time it waited ([44dda85](https://github.com/orcher-io/orcher/commit/44dda853f012df56515f4cba1d1f73287668e92d))
+* stop the tasks scheduled by activations that had not seen the cancel request ([f4ec0d9](https://github.com/orcher-io/orcher/commit/f4ec0d92e2b278310f0325d3b02ca562f4243af3))
+* stop the tasks scheduled by activations that had not seen the cancel request ([9134746](https://github.com/orcher-io/orcher/commit/9134746a918bcd152f2b68b29e3cef633e747f87)), closes [#17](https://github.com/orcher-io/orcher/issues/17)
+* **storage:** schedule a task by the database's clock ([07e7855](https://github.com/orcher-io/orcher/commit/07e7855ef18d9d42c72a9cffd1eb74a5d99d185e))
+* **storage:** schedule a task by the database's clock ([9f43985](https://github.com/orcher-io/orcher/commit/9f43985558ae254427171ec03eeafc2728dc7206)), closes [#26](https://github.com/orcher-io/orcher/issues/26)
+
 ## [0.7.1](https://github.com/orcher-io/orcher/compare/v0.7.0...v0.7.1) (2026-11-13)
 
 
