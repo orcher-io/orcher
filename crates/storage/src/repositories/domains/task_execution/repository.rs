@@ -122,6 +122,10 @@ impl From<TaskExecutionRow> for TaskExecution {
 /// that was queued when the request came start afterwards and run to the end
 /// as if it were cleanup.
 ///
+/// Both times are the database's: the request is stamped with `NOW()` and so
+/// is a task's `scheduled_at` when it is inserted, so the two compare on one
+/// clock however far the engine's own drifts from it.
+///
 /// One rule for every place that asks: the heartbeat that tells a running
 /// task to stop, the start that refuses a queued one, the retry that is not
 /// scheduled, and the sweep that ends a queued one. A task's rows live on its
@@ -518,7 +522,12 @@ impl TaskExecutionRepository {
             -- is what the task's dispatch is stamped with, so the claims that
             -- hand the task to a worker can be scoped by it, and what the
             -- task's completion and heartbeats are checked against.
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
+            -- Scheduled by the database's clock, the one a cancellation request
+            -- is timed by: whether a task is work the request interrupted is
+            -- decided by comparing the two (`STOPPED_BY_CANCELLATION`), and an
+            -- engine clock behind the database's made the workflow's cleanup,
+            -- scheduled after the request, look scheduled before it.
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
                     (SELECT organization_id FROM workflow_executions WHERE execution_id = $5::text))
             ON CONFLICT (execution_id, task_id, attempt_number) WHERE scheduled_by_command
             DO NOTHING
@@ -540,7 +549,6 @@ impl TaskExecutionRepository {
         .bind(&namespace)
         .bind(attempt_number)
         .bind("scheduled")
-        .bind(now)
         .bind(schedule_to_start_timeout_secs)
         .bind(start_to_close_timeout_secs)
         .bind(heartbeat_timeout_secs)
