@@ -4,7 +4,7 @@ What changes for an existing deployment or client when you move to a release,
 beyond the bug fixes listed in [CHANGELOG.md](CHANGELOG.md). Read the section
 for every release between the one you run and the one you are moving to.
 
-## Unreleased (after 0.7.3)
+## 0.7.4
 
 - Task polls carry `client_workflow_id`, as workflow polls do since 0.7.3,
   and so do tasks returned eagerly with an activation, naming the task's run
@@ -16,8 +16,9 @@ for every release between the one you run and the one you are moving to.
   finish first, or key it by something other than the workflow id.
 - Migration V089 sets `autovacuum_analyze_scale_factor = 0` and
   `autovacuum_analyze_threshold = 1000` on `outbox_queue`, so the outbox is
-  analyzed after a thousand changes whatever its size and its claims are
-  planned for a burst of pending rows within one autovacuum round (#63). It
+  analyzed after a thousand changes whatever its size, and its claims are
+  planned for a burst of pending rows once the next autovacuum round has
+  analyzed it (#63). It
   replaces any value you had set on the table yourself; set yours again
   after migrating if you want it back. It takes no lock that blocks reads or
   writes.
