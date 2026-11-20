@@ -28,6 +28,10 @@ name: CI
 # The cost is bounded deliberately: one job, sharing one build between the
 # compile check, the unit tests and the database guards, cached, cancelled
 # when a branch is pushed again, and skipped for a documentation-only change.
+# A documentation-only pull request still runs the workflow: `ci` is a required
+# check, and a pull request the workflow never ran on waited for it for ever.
+# The `verified` job finds that only Markdown changed and the `ci` job is
+# skipped by its condition, which GitHub counts as passing.
 #
 # The commands are in scripts/ci.sh, not here, so the same gate runs anywhere.
 #
@@ -35,9 +39,6 @@ name: CI
 # whatever a pull request's code does on the machine that hosts it.
 on:
   pull_request:
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
   push:
     branches: [main]
     paths-ignore:
@@ -63,8 +64,11 @@ jobs:
   # head into main, which is the head itself when the branch was up to date,
   # and a squash merge of it is that same tree. Such a push skips the second,
   # identical run. Any other push, a manual run and the weekly run go ahead.
+  #
+  # A pull request that changes only Markdown, or files under docs/, has
+  # nothing for the build to check, and is skipped the same way.
   verified:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     permissions:
       actions: read
@@ -78,9 +82,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
           skip=false
+          if [ "$EVENT" = pull_request ]; then
+            others=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename' \
+              | grep -Ev '(\.md$|^docs/)' || true)
+            if [ -z "$others" ]; then
+              echo "#$PR changes only documentation; nothing for the build to check"
+              skip=true
+            else
+              echo "#$PR changes more than documentation; running CI"
+            fi
+            echo "skip=$skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           tree=$(gh api "repos/$REPO/git/commits/$SHA" --jq .tree.sha)
           for pr in $(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[].number'); do
             # By the pull request's branch: a run lists its pull requests only
