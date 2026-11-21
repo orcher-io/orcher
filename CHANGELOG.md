@@ -5,13 +5,9 @@
 
 ### Bug Fixes
 
-* a cancelled timer stays cancelled ([cc15f16](https://github.com/orcher-io/orcher/commit/cc15f16f34472383eb86f922ce21620d1a12f56e))
 * a cancelled timer stays cancelled ([55e7946](https://github.com/orcher-io/orcher/commit/55e79467bcff01acbebf63417dd2aba6179ce4c2)), closes [#52](https://github.com/orcher-io/orcher/issues/52)
-* analyze the outbox after a thousand changes, whatever its size ([f5c8cc6](https://github.com/orcher-io/orcher/commit/f5c8cc67cceff78a1e6a3c80666a3ba14b064605))
 * analyze the outbox after a thousand changes, whatever its size ([b9e14ee](https://github.com/orcher-io/orcher/commit/b9e14ee729ce753d8d5821ffdb3bc0425e1de377)), closes [#63](https://github.com/orcher-io/orcher/issues/63)
-* keep the journals and retries of runs that have not ended ([60ff2dd](https://github.com/orcher-io/orcher/commit/60ff2dd8da5e3c772cfa20984c1d850ba7bf7c58))
 * keep the journals and retries of runs that have not ended ([871b484](https://github.com/orcher-io/orcher/commit/871b484744763d63117ec371d1cbbf3a1f6331e7)), closes [#44](https://github.com/orcher-io/orcher/issues/44)
-* name a task's run by the workflow id its users know it by ([173fbfa](https://github.com/orcher-io/orcher/commit/173fbfa064bc62fa88fb726600f7defc3bd37487))
 * name a task's run by the workflow id its users know it by ([ce1c753](https://github.com/orcher-io/orcher/commit/ce1c753df2eda51ab06ceceb96efc2cd8fba2fdf)), closes [#56](https://github.com/orcher-io/orcher/issues/56)
 
 
