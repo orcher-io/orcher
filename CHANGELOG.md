@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.5](https://github.com/orcher-io/orcher/compare/v0.7.4...v0.7.5) (2026-11-22)
+
+
+### Bug Fixes
+
+* **engine:** wake a workflow when a task it may be waiting on finishes ([#77](https://github.com/orcher-io/orcher/issues/77)) ([d32a4e8](https://github.com/orcher-io/orcher/commit/d32a4e83cf9c5745dfa0d40ac4d5e2ba6322285d))
+* store a payload envelope the engine cannot read as it is ([#74](https://github.com/orcher-io/orcher/issues/74)) ([084d45e](https://github.com/orcher-io/orcher/commit/084d45e77154c974f993b453eb59a04d781e5bd7))
+
+
+### Documentation
+
+* link the documentation site from the README ([#71](https://github.com/orcher-io/orcher/issues/71)) ([f025258](https://github.com/orcher-io/orcher/commit/f025258ef8018e67b8f61adcf240ad9ed401ed15))
+
 ## [0.7.4](https://github.com/orcher-io/orcher/compare/v0.7.3...v0.7.4) (2026-11-21)
 
 
