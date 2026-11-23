@@ -112,8 +112,8 @@ DATABASE_URL='postgresql://localhost/orcher' cargo run --release -p orcher-orche
 ```
 
 ```bash
-cargo test                # run the tests
-cargo check --workspace   # check all crates
+cargo test --workspace --lib -- --test-threads=1   # the unit tests; no database needed
+scripts/ci.sh                                      # everything CI runs; see CONTRIBUTING.md
 ```
 
 ```
