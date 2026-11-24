@@ -45,9 +45,9 @@
 //!     .await?;
 //!
 //! // Poll for task execution work
-//! if let Some(work) = execution_client.poll_task_execution("default-queue").await? {
+//! if let Some(work) = execution_client.poll_task_execution("default-queue", "default").await? {
 //!     // Execute the task...
-//!     execution_client.complete_task_execution(&work.task_token, None).await?;
+//!     execution_client.complete_task_execution(&work.task_token, "default", None).await?;
 //! }
 //! # Ok(())
 //! # }

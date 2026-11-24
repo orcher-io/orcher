@@ -44,6 +44,7 @@
 //!     size_bytes: 1024,
 //!     content_type: "application/wasm".to_string(),
 //!     manifest: None,
+//!     extra: Default::default(),
 //! };
 //!
 //! let key = storage.generate_key("my-workflow", "1.0.0", "abc123");

@@ -74,6 +74,10 @@ run_check() {
   # variables and race under the default parallel runner.
   step "library unit tests"
   cargo test --workspace --lib --locked -- --test-threads=1
+  # The examples in the documentation comments. They compile against the
+  # code beside them, so one that has fallen behind fails here.
+  step "documentation examples"
+  cargo test --workspace --doc --locked
 }
 
 # The database-backed guards.
