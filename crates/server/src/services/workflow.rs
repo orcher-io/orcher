@@ -889,6 +889,7 @@ impl WorkflowService {
     fn entity_to_status_response(entity: &WorkflowExecution) -> ExecutionStatusResponse {
         ExecutionStatusResponse {
             execution_id: entity.execution_id.clone(),
+            workflow_id: entity.workflow_id.clone(),
             workflow_name: entity.workflow_name.clone(),
             workflow_version: entity.workflow_version.clone(),
             namespace: entity.namespace.clone(),
@@ -924,6 +925,7 @@ impl WorkflowService {
     fn entity_to_summary(entity: &WorkflowExecution) -> ExecutionSummary {
         ExecutionSummary {
             execution_id: entity.execution_id.clone(),
+            workflow_id: entity.workflow_id.clone(),
             workflow_name: entity.workflow_name.clone(),
             workflow_version: entity.workflow_version.clone(),
             status: Self::parse_status(&entity.status),
