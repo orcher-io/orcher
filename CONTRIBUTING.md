@@ -3,6 +3,23 @@
 Issues and pull requests are welcome. For anything larger than a fix, open an
 issue first so the approach can be agreed before you write it.
 
+## What we ask of a pull request
+
+Every change is reviewed to the same standard, whoever wrote it and whatever
+tools they used.
+
+- **You answer for the change.** Use any tools you like, AI assistants
+  included, but you must understand what you propose, have run it yourself,
+  and reply to review comments yourself. A pull request that nobody is
+  following up on is closed without review.
+- **Say you are taking an issue.** Comment on it before you start, so that two
+  people do not do the same work.
+- **One change per pull request**, with a test that fails without it. If this
+  is your first contribution here, keep to one open pull request until it is
+  merged.
+- **Fill in the template.** It asks what you ran, what you saw, and what you
+  did not test. "Nothing" is a fine answer to the last one if it is true.
+
 ## Build and test
 
 You need a current stable Rust toolchain (`rustup update stable`) and, for
