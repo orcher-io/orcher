@@ -88,7 +88,7 @@ run_check() {
 GUARDS=(
   "Tenancy — a caller sees only its own workers|--lib workers::tests::tenancy -- --ignored --test-threads=1"
   "Tenancy — a schedule name belongs to an organisation|--lib schedule::repository::tenancy -- --ignored --test-threads=1"
-  "Tenancy — a batch acts on one organisation's work|--test batch_status_skips_terminal -- --ignored --test-threads=1"
+  "Batches — a batch never overwrites a run that already ended, even one ending mid-statement, and acts on one organisation's work|--test batch_status_skips_terminal -- --ignored --test-threads=1"
   "Lifecycle — worker health and the silent-worker sweep|--lib worker::repository -- --ignored --test-threads=1"
   "Journal — concurrent appends all land, a repeated outcome lands once|--lib journal::repository -- --ignored --test-threads=1"
   "Children — a refused start fails the parent, a half-recorded start converges, a child holds its workflow id and one started under a held id is refused to its parent|--test child_start -- --ignored --test-threads=1"
@@ -145,6 +145,14 @@ GUARDS=(
   "Retention — a run's journal is deleted only once the run has ended before the period, as a whole; a running, waiting or retrying run keeps its journal and a retrying run its row|--test retention_keeps_open_journals -- --ignored --test-threads=1"
   "Timers — a cancelled timer's row is cancelled and a fire after a journaled cancel records nothing; a timer not cancelled is journaled as fired once|--test cancelled_timer -- --ignored --test-threads=1"
   "Sharding — a node claims only outbox rows on the shards it owns, rows from before shards stay claimable, the sweep picks up a row no one owns, no scope claims everything|--test shard_filtered_claims -- --ignored --test-threads=1"
+  "Cancellation — a cancel never overwrites a run that already ended, and still cancels a live one|--test cancel_does_not_overwrite_terminal -- --ignored --test-threads=1"
+  "Cancellation — a workflow ending itself as cancelled keeps an ending the run already has, and a superseded owner cannot cancel|--test workflow_cancellation_keeps_an_ending -- --ignored --test-threads=1"
+  "Cancellation — a workflow whose code has run is asked once and keeps running; one that never ran or has ended is not asked|--test workflow_cancellation_requests -- --ignored --test-threads=1"
+  "Releases — a run binds to the release that first claims it and is never rebound; every claim path refuses another release and an undeclared worker|--test execution_version_binding -- --ignored --test-threads=1"
+  "Releases — a queue's current release takes all new work, per organization; cleared, any worker may; a stalled run can be rebound, an ended one cannot|--test current_release_routing -- --ignored --test-threads=1"
+  "Releases — a prefetched run is handed only to a poll of the release it was bound to|--test prefetch_by_release -- --ignored --test-threads=1"
+  "Step ids — a run binds a step-id scheme and a history lineage at its first activation, goes only to workers supporting the scheme, and keeps both across a reset|--test step_id_binding -- --ignored --test-threads=1"
+  "Sharding — a superseded owner's write is refused: it cannot complete, fail or move a run, and a lost shard refuses rather than falling back|--test write_fence_refuses_stale_owner -- --ignored --test-threads=1"
 )
 
 CREATED_DB=""

@@ -10,7 +10,7 @@
 //! including the default (no policy set), which must behave exactly as before.
 //!
 //! Requires a live database:
-//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test current_release_routing
+//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test current_release_routing -- --ignored --test-threads=1
 
 use std::sync::Arc;
 
@@ -69,6 +69,7 @@ async fn cleanup(pool: &PgPool, id: Uuid, queue: &str) {
 
 /// The rollout case: v1 workers are still up, but new work must go to v2.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn new_work_goes_only_to_the_current_release() {
     let pool = pool().await;
     let queue = format!("cur-a-{}", Uuid::new_v4());
@@ -101,6 +102,7 @@ async fn new_work_goes_only_to_the_current_release() {
 /// The default. No policy means any release may take new work — today's
 /// behaviour, and what every existing queue keeps doing.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn without_a_current_release_any_worker_may_take_new_work() {
     let pool = pool().await;
     let queue = format!("cur-b-{}", Uuid::new_v4());
@@ -123,6 +125,7 @@ async fn without_a_current_release_any_worker_may_take_new_work() {
 /// A worker that declares nothing must not take new work on a queue that has
 /// named a current release — it cannot be that release.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn an_undeclared_worker_cannot_take_new_work_from_a_pinned_queue() {
     let pool = pool().await;
     let queue = format!("cur-c-{}", Uuid::new_v4());
@@ -149,6 +152,7 @@ async fn an_undeclared_worker_cannot_take_new_work_from_a_pinned_queue() {
 /// The batch path is the one the live poller uses, so the rule has to hold there
 /// too — this is exactly where the original routing filter was missing.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn the_batch_path_also_honours_the_current_release() {
     let pool = pool().await;
     let queue = format!("cur-d-{}", Uuid::new_v4());
@@ -199,6 +203,7 @@ async fn the_batch_path_also_honours_the_current_release() {
 
 /// Clearing the policy restores the default.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn clearing_the_current_release_restores_open_claiming() {
     let pool = pool().await;
     let queue = format!("cur-e-{}", Uuid::new_v4());
@@ -240,6 +245,7 @@ async fn clearing_the_current_release_restores_open_claiming() {
 /// A blank release is not a release. Storing one would pin the queue to a
 /// release named "" and nothing could ever claim new work again.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_blank_current_release_is_stored_as_no_policy() {
     let pool = pool().await;
     let queue = format!("cur-f-{}", Uuid::new_v4());
@@ -272,6 +278,7 @@ async fn a_blank_current_release_is_stored_as_no_policy() {
 /// The current release decides where NEW work goes, never where running work
 /// continues — that distinction is the whole point.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_bound_execution_ignores_the_current_release() {
     let pool = pool().await;
     let queue = format!("cur-g-{}", Uuid::new_v4());
@@ -314,6 +321,7 @@ async fn a_bound_execution_ignores_the_current_release() {
 
 /// Move a stalled execution onto a release that is actually running.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn rebinding_moves_a_stalled_execution_to_a_live_release() {
     let pool = pool().await;
     let queue = format!("rebind-a-{}", Uuid::new_v4());
@@ -361,6 +369,7 @@ async fn rebinding_moves_a_stalled_execution_to_a_live_release() {
 
 /// Unbinding reopens it to any release.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn rebinding_to_none_unbinds_the_execution() {
     let pool = pool().await;
     let queue = format!("rebind-b-{}", Uuid::new_v4());
@@ -391,6 +400,7 @@ async fn rebinding_to_none_unbinds_the_execution() {
 /// A finished workflow has nothing left to run, so rebinding it is refused
 /// rather than silently rewriting a terminal row.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn rebinding_a_terminal_execution_is_refused() {
     let pool = pool().await;
     let queue = format!("rebind-c-{}", Uuid::new_v4());
@@ -486,6 +496,7 @@ async fn cleanup_org(pool: &PgPool, organization_id: Uuid) {
 
 /// Two organisations, one queue name: each keeps its own policy.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_current_release_is_scoped_to_one_organisation() {
     let pool = pool().await;
     let queue = format!("cur-tenant-{}", Uuid::new_v4());
@@ -526,6 +537,7 @@ async fn a_current_release_is_scoped_to_one_organisation() {
 /// The consequence, seen from the claim path: one tenant's policy must not
 /// decide where another tenant's new work may be claimed.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn one_tenants_release_policy_does_not_pin_another_tenants_work() {
     let pool = pool().await;
     let queue = format!("cur-tenant-claim-{}", Uuid::new_v4());
