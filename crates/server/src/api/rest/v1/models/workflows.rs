@@ -89,6 +89,10 @@ pub struct ExecutionStatusResponse {
     /// Execution ID
     pub execution_id: String,
 
+    /// The workflow id the client chose when it started the run
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workflow_id: Option<String>,
+
     /// Workflow name
     pub workflow_name: String,
 
@@ -236,6 +240,10 @@ pub struct ListExecutionsResponse {
 pub struct ExecutionSummary {
     /// Execution ID
     pub execution_id: String,
+
+    /// The workflow id the client chose when it started the run
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workflow_id: Option<String>,
 
     /// Workflow name
     pub workflow_name: String,
@@ -395,6 +403,29 @@ impl ExecutionStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_execution_names_the_clients_workflow_id_only_when_there_is_one() {
+        let summary = serde_json::json!({
+            "executionId": "31f014b8-2755-43d5-a53a-729b495a9acc",
+            "workflowId": "order-42",
+            "workflowName": "order",
+            "workflowVersion": "1.0",
+            "status": "COMPLETED",
+            "submittedAt": "2026-01-01T00:00:00Z",
+            "tags": {}
+        });
+        let parsed: ExecutionSummary = serde_json::from_value(summary).unwrap();
+        assert_eq!(parsed.workflow_id.as_deref(), Some("order-42"));
+        let written = serde_json::to_value(&parsed).unwrap();
+        assert_eq!(written["workflowId"], "order-42");
+
+        // A run started without one says nothing, rather than `null`
+        let mut without = parsed;
+        without.workflow_id = None;
+        let written = serde_json::to_value(&without).unwrap();
+        assert!(written.get("workflowId").is_none());
+    }
 
     #[test]
     fn test_execution_status_is_terminal() {
