@@ -19,10 +19,10 @@
 //! # Usage
 //!
 //! ```no_run
-//! use orcher_server::grpc::clients::orchestrator::OrchestratorClient;
+//! use orcher_server::grpc::clients::execution::ExecutionServiceClient;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let client = OrchestratorClient::connect("http://localhost:50051").await?;
+//! let client = ExecutionServiceClient::connect("http://localhost:50051").await?;
 //! # Ok(())
 //! # }
 //! ```

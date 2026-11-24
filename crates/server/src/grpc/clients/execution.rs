@@ -29,7 +29,9 @@
 //! if let Some(work) = client.poll_workflow_execution("default-queue", "default").await? {
 //!     println!("Got workflow work: {:?}", work);
 //!     // Execute workflow...
-//!     client.complete_workflow_execution(&work.task_token, "default", vec![]).await?;
+//!     client
+//!         .complete_workflow_execution(&work.workflow_id, &work.execution_id, "default", vec![])
+//!         .await?;
 //! }
 //! # Ok(())
 //! # }
