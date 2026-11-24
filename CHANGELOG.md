@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.7.6](https://github.com/orcher-io/orcher/compare/v0.7.5...v0.7.6) (2026-11-24)
+
+
+### Features
+
+* **rest:** return the workflow id with an execution ([#93](https://github.com/orcher-io/orcher/issues/93)) ([edef0ab](https://github.com/orcher-io/orcher/commit/edef0abb2a45fe01432b1fd32385bf4ee90fff53)), closes [#92](https://github.com/orcher-io/orcher/issues/92)
+
+
+### Bug Fixes
+
+* bring four doc examples up to date and check them in CI ([#88](https://github.com/orcher-io/orcher/issues/88)) ([#89](https://github.com/orcher-io/orcher/issues/89)) ([8041332](https://github.com/orcher-io/orcher/commit/8041332932257184fbd3ee2c6defa270d7b1b51c))
+
+
+### Documentation
+
+* say how to build the engine and run its tests ([#86](https://github.com/orcher-io/orcher/issues/86)) ([e8354ca](https://github.com/orcher-io/orcher/commit/e8354ca704206154c0fc72ae7d4eb12fd59d03c7)), closes [#83](https://github.com/orcher-io/orcher/issues/83)
+* say what is expected of a pull request author ([#91](https://github.com/orcher-io/orcher/issues/91)) ([6fe7aa6](https://github.com/orcher-io/orcher/commit/6fe7aa6d96e6e5b1753f859913b51f72783e543d)), closes [#90](https://github.com/orcher-io/orcher/issues/90)
+* wait for the engine before the README says it is ready ([#79](https://github.com/orcher-io/orcher/issues/79)) ([fcbd6f5](https://github.com/orcher-io/orcher/commit/fcbd6f50cbda82a44c406b67e103342eb8150d89)), closes [#78](https://github.com/orcher-io/orcher/issues/78)
+
 ## [0.7.5](https://github.com/orcher-io/orcher/compare/v0.7.4...v0.7.5) (2026-11-22)
 
 
