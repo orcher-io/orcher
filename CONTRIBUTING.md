@@ -13,8 +13,7 @@ tools they used.
   and reply to review comments yourself. A pull request that nobody is
   following up on is closed without review.
 - **Say you are taking an issue.** Comment on it before you start, so that two
-  people do not do the same work. An issue marked `good first issue` states
-  what a fix has to show.
+  people do not do the same work.
 - **One change per pull request**, with a test that fails without it. If this
   is your first contribution here, keep to one open pull request until it is
   merged.
