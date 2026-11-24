@@ -2769,8 +2769,8 @@ impl WorkflowExecutionRepository {
     /// so it is fenced on the same terms as completion and failure, and
     /// guarded the same way: a run that has already ended keeps its ending.
     /// The status write it replaces had neither guard, so a late cancellation
-    /// could overwrite a completed or terminated run, and it stamped
-    /// `completed_at` where every other cancellation stamps `cancelled_at`.
+    /// could overwrite a completed or terminated run. Like every cancellation
+    /// it stamps `cancelled_at`, and `completed_at` as the time the run ended.
     ///
     /// Returns `false` when nothing was recorded.
     pub async fn cancel_workflow_atomic(

@@ -9,7 +9,7 @@
 //! for.
 //!
 //! Requires a live database:
-//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test prefetch_by_release
+//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test prefetch_by_release -- --ignored --test-threads=1
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -69,6 +69,7 @@ fn poll(queue: &str, release: &str) -> PollExecutionRequest {
 }
 
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_prefetched_run_is_handed_only_to_its_own_release() {
     let pool = pool().await;
     let queue = format!("prefetch-release-{}", Uuid::new_v4());

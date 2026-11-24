@@ -11,7 +11,7 @@
 //! reporting none only runs nothing is bound to.
 //!
 //! Requires a live database:
-//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test step_id_binding
+//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test step_id_binding -- --ignored --test-threads=1
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -124,6 +124,7 @@ fn queue(name: &str) -> String {
 }
 
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_new_run_binds_the_kernel_scheme_and_its_own_lineage() {
     let pool = pool().await;
     let repo = WorkflowExecutionRepository::new(pool.clone());
@@ -151,6 +152,7 @@ async fn a_new_run_binds_the_kernel_scheme_and_its_own_lineage() {
 }
 
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_bound_run_goes_only_to_a_worker_supporting_its_scheme() {
     let pool = pool().await;
     let repo = WorkflowExecutionRepository::new(pool.clone());
@@ -175,6 +177,7 @@ async fn a_bound_run_goes_only_to_a_worker_supporting_its_scheme() {
 }
 
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_run_first_activated_without_a_scheme_binds_the_sdk_scheme() {
     let pool = pool().await;
     let repo = WorkflowExecutionRepository::new(pool.clone());
@@ -203,6 +206,7 @@ async fn a_run_first_activated_without_a_scheme_binds_the_sdk_scheme() {
 }
 
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn the_batch_and_by_id_claims_route_and_bind_alike() {
     let pool = pool().await;
     let repo = WorkflowExecutionRepository::new(pool.clone());
@@ -280,6 +284,7 @@ fn poll(queue: &str, schemes: &[i32]) -> PollExecutionRequest {
 }
 
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_prefetched_run_is_handed_only_to_polls_supporting_its_scheme() {
     let pool = pool().await;
     let queue = queue("prefetch");
@@ -325,6 +330,7 @@ async fn a_prefetched_run_is_handed_only_to_polls_supporting_its_scheme() {
 }
 
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_reset_keeps_the_scheme_and_the_lineage() {
     let pool = pool().await;
     let queue = queue("reset");

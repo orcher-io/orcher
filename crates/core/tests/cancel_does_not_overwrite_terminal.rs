@@ -11,7 +11,7 @@
 //! a live execution, or this is just breakage.
 //!
 //! Requires a live database:
-//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test cancel_does_not_overwrite_terminal
+//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test cancel_does_not_overwrite_terminal -- --ignored --test-threads=1
 
 use std::sync::Arc;
 
@@ -65,6 +65,7 @@ async fn cleanup(pool: &PgPool, id: Uuid) {
 
 /// The case that matters: the workflow finished, and a cancellation arrives.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn cancelling_a_completed_execution_does_not_overwrite_it() {
     let pool = pool().await;
     let (id, execution_id) = seed(&pool, "completed").await;
@@ -89,6 +90,7 @@ async fn cancelling_a_completed_execution_does_not_overwrite_it() {
 /// Same for the other terminal states, so the guard is not accidentally
 /// specific to `completed`.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn cancelling_a_failed_or_cancelled_execution_is_refused() {
     let pool = pool().await;
     let repo = WorkflowExecutionRepository::new((*pool).clone());
@@ -105,6 +107,7 @@ async fn cancelling_a_failed_or_cancelled_execution_is_refused() {
 /// The positive control. A guard that refused everything would pass the tests
 /// above while making cancellation useless.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn cancelling_a_running_execution_succeeds() {
     let pool = pool().await;
     let (id, execution_id) = seed(&pool, "running").await;
@@ -121,6 +124,7 @@ async fn cancelling_a_running_execution_succeeds() {
 /// Cancel records `cancelled_at`. The previous status-only write left it NULL,
 /// so user-cancelled and batch-cancelled executions disagreed on the same field.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn cancelling_records_when_it_happened() {
     let pool = pool().await;
     let (id, execution_id) = seed(&pool, "running").await;
@@ -145,6 +149,7 @@ async fn cancelling_records_when_it_happened() {
 
 /// Cancelling something that does not exist is not a success.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn cancelling_a_missing_execution_reports_no_cancellation() {
     let pool = pool().await;
     let repo = WorkflowExecutionRepository::new((*pool).clone());
@@ -167,6 +172,7 @@ async fn cancelling_a_missing_execution_reports_no_cancellation() {
 /// call it, and used `update_status`, which writes the status unconditionally.
 /// This pins that difference so the handler is not "simplified" back later.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn the_unconditional_status_write_would_overwrite_a_completed_run() {
     let pool = pool().await;
     let (id, execution_id) = seed(&pool, "completed").await;

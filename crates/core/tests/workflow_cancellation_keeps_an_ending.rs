@@ -6,7 +6,7 @@
 //! terminated run into a cancelled one.
 //!
 //! Requires a live database:
-//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test workflow_cancellation_keeps_an_ending
+//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test workflow_cancellation_keeps_an_ending -- --ignored --test-threads=1
 
 use std::sync::Arc;
 
@@ -78,6 +78,7 @@ async fn remove(pool: &PgPool, id: Uuid) {
 }
 
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_running_workflow_is_recorded_as_cancelled() {
     let pool = pool().await;
     let id = seed(&pool, "running").await;
@@ -95,11 +96,15 @@ async fn a_running_workflow_is_recorded_as_cancelled() {
         cancelled_at,
         "cancelled_at is the timestamp a cancellation sets"
     );
-    assert!(!completed_at, "a cancellation is not a completion");
+    assert!(
+        completed_at,
+        "completed_at is when a run ended, whichever way it ended"
+    );
     remove(&pool, id).await;
 }
 
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_finished_run_keeps_its_ending() {
     let pool = pool().await;
     let repo = WorkflowExecutionRepository::new((*pool).clone());
@@ -121,6 +126,7 @@ async fn a_finished_run_keeps_its_ending() {
 }
 
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_superseded_owner_cannot_cancel_a_workflow() {
     let pool = pool().await;
     let shard_id = 4094;

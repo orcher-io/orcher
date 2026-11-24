@@ -2,7 +2,7 @@
 //! after, not a final status write.
 //!
 //! Requires a live database:
-//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test workflow_cancellation_requests
+//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test workflow_cancellation_requests -- --ignored --test-threads=1
 
 use std::sync::Arc;
 
@@ -75,6 +75,7 @@ async fn request_columns(
 }
 
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_running_workflow_is_asked_and_keeps_running() {
     let pool = pool().await;
     let id = seed(&pool, "running", 2).await;
@@ -97,6 +98,7 @@ async fn a_running_workflow_is_asked_and_keeps_running() {
 }
 
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn asking_again_keeps_the_first_request() {
     let pool = pool().await;
     let id = seed(&pool, "running", 1).await;
@@ -128,6 +130,7 @@ async fn asking_again_keeps_the_first_request() {
 /// No activation handed out means no code ran, so nothing to clean up: the
 /// caller ends it directly.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_workflow_whose_code_never_ran_is_not_asked() {
     let pool = pool().await;
     let id = seed(&pool, "pending", 0).await;
@@ -144,6 +147,7 @@ async fn a_workflow_whose_code_never_ran_is_not_asked() {
 }
 
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn an_ended_workflow_is_not_asked() {
     let pool = pool().await;
     let repo = WorkflowExecutionRepository::new((*pool).clone());
@@ -167,6 +171,7 @@ async fn an_ended_workflow_is_not_asked() {
 
 /// The workflow observes the request once, however often it is made.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn the_request_is_journalled_once() {
     let pool = pool().await;
     let id = seed(&pool, "running", 1).await;
@@ -198,6 +203,7 @@ async fn the_request_is_journalled_once() {
 /// Whether a request is new decides whether the run is woken; asking again
 /// must not wake it a second time.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn only_the_first_request_is_new() {
     let pool = pool().await;
     let id = seed(&pool, "running", 1).await;
@@ -222,6 +228,7 @@ async fn only_the_first_request_is_new() {
 /// A batch reaches every live match once: not one already asked, not one that
 /// has ended, not another namespace's.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_batch_selects_only_runs_it_has_not_reached() {
     let pool = pool().await;
     let namespace = format!("batch-cancel-{}", Uuid::new_v4());

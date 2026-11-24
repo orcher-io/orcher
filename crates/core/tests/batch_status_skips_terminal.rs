@@ -14,7 +14,7 @@
 //! the negative cases while making the operation useless.
 //!
 //! Requires a live database:
-//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test batch_status_skips_terminal
+//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test batch_status_skips_terminal -- --ignored --test-threads=1
 
 use std::sync::Arc;
 
@@ -115,6 +115,7 @@ async fn cleanup(pool: &PgPool, namespace: &str) {
 
 /// A completed workflow must survive a batch that sweeps its namespace.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_batch_does_not_overwrite_completed_executions() {
     let pool = pool().await;
     let ns = format!("batch-a-{}", Uuid::new_v4());
@@ -159,6 +160,7 @@ async fn a_batch_does_not_overwrite_completed_executions() {
 
 /// Every terminal state, so the guard is not accidentally specific to one.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_batch_skips_all_terminal_states() {
     let pool = pool().await;
     let ns = format!("batch-b-{}", Uuid::new_v4());
@@ -208,6 +210,7 @@ async fn a_batch_skips_all_terminal_states() {
 
 /// Positive control: the batch must still do its job.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_batch_updates_non_terminal_executions() {
     let pool = pool().await;
     let ns = format!("batch-c-{}", Uuid::new_v4());
@@ -265,6 +268,7 @@ async fn a_batch_updates_non_terminal_executions() {
 /// losing a completed workflow's result. With it in the outer WHERE, it is
 /// skipped.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_workflow_completing_mid_batch_is_not_overwritten() {
     let pool = pool().await;
     let ns = format!("batch-race-{}", Uuid::new_v4());

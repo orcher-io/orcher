@@ -7,7 +7,7 @@
 //! look like protection while providing none.
 //!
 //! Requires a live database:
-//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test execution_version_binding
+//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test execution_version_binding -- --ignored --test-threads=1
 
 use std::sync::Arc;
 
@@ -75,6 +75,7 @@ async fn cleanup(pool: &PgPool, id: Uuid) {
 }
 
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn first_claim_binds_the_execution_to_the_worker_release() {
     let pool = pool().await;
     let queue = format!("bind-a-{}", Uuid::new_v4());
@@ -99,6 +100,7 @@ async fn first_claim_binds_the_execution_to_the_worker_release() {
 /// The half that matters. A later claim by a different release must not move an
 /// in-flight execution onto new code.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_later_claim_by_a_different_release_does_not_rebind() {
     let pool = pool().await;
     let queue = format!("bind-b-{}", Uuid::new_v4());
@@ -128,6 +130,7 @@ async fn a_later_claim_by_a_different_release_does_not_rebind() {
 
 /// A worker that declares nothing must not clear an existing binding either.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_worker_without_a_release_does_not_clear_the_binding() {
     let pool = pool().await;
     let queue = format!("bind-c-{}", Uuid::new_v4());
@@ -155,6 +158,7 @@ async fn a_worker_without_a_release_does_not_clear_the_binding() {
 /// Today's behaviour: no worker declares a release, so nothing binds and claims
 /// work exactly as before.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn without_a_declared_release_nothing_is_bound() {
     let pool = pool().await;
     let queue = format!("bind-d-{}", Uuid::new_v4());
@@ -184,6 +188,7 @@ async fn without_a_declared_release_nothing_is_bound() {
 /// The case the whole feature exists for: old release retired, workflow wakes
 /// up, only new workers are running. It must not be handed over.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_bound_execution_is_not_claimable_by_a_different_release() {
     let pool = pool().await;
     let queue = format!("route-a-{}", Uuid::new_v4());
@@ -211,6 +216,7 @@ async fn a_bound_execution_is_not_claimable_by_a_different_release() {
 
 /// The other half: the right release must still get it, or this is just breakage.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_bound_execution_is_claimable_by_its_own_release() {
     let pool = pool().await;
     let queue = format!("route-b-{}", Uuid::new_v4());
@@ -239,6 +245,7 @@ async fn a_bound_execution_is_claimable_by_its_own_release() {
 /// and it is also the escape hatch: not binding an execution lets any release
 /// run it, without needing a fall-through timer.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn an_unbound_execution_is_claimable_by_any_release() {
     let pool = pool().await;
     let queue = format!("route-c-{}", Uuid::new_v4());
@@ -261,6 +268,7 @@ async fn an_unbound_execution_is_claimable_by_any_release() {
 /// A worker declaring nothing must not pick up work bound to a release — it
 /// cannot be the release the execution needs.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn an_undeclared_worker_cannot_claim_a_bound_execution() {
     let pool = pool().await;
     let queue = format!("route-d-{}", Uuid::new_v4());
@@ -289,6 +297,7 @@ async fn an_undeclared_worker_cannot_claim_a_bound_execution() {
 /// an operator runs during an incident ("what is stuck, and on what release")
 /// and before retiring an old release ("does anything still need it").
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn waiting_work_is_reported_per_release() {
     let pool = pool().await;
     let queue = format!("route-e-{}", Uuid::new_v4());
@@ -337,6 +346,7 @@ async fn waiting_work_is_reported_per_release() {
 
 /// The batch path is what the live poller actually uses.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn the_batch_claim_refuses_a_different_release() {
     let pool = pool().await;
     let queue = format!("batch-a-{}", Uuid::new_v4());
@@ -371,6 +381,7 @@ async fn the_batch_claim_refuses_a_different_release() {
 
 /// Positive control for the batch path.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn the_batch_claim_allows_the_matching_release() {
     let pool = pool().await;
     let queue = format!("batch-b-{}", Uuid::new_v4());
@@ -407,6 +418,7 @@ async fn the_batch_claim_allows_the_matching_release() {
 /// The batch path did not bind at all, so an execution first claimed in a batch
 /// stayed unbound forever and every later release could pick it up.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn the_batch_claim_binds_on_first_claim() {
     let pool = pool().await;
     let queue = format!("batch-c-{}", Uuid::new_v4());
@@ -436,6 +448,7 @@ async fn the_batch_claim_binds_on_first_claim() {
 
 /// The targeted continuation path.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn the_by_id_claim_refuses_a_different_release() {
     let pool = pool().await;
     let queue = format!("byid-a-{}", Uuid::new_v4());
@@ -493,6 +506,7 @@ async fn the_by_id_claim_refuses_a_different_release() {
 /// the struct was silently dropped. A test with its own INSERT would pass either
 /// way and prove nothing.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_successor_created_with_an_outbox_task_keeps_its_pin() {
     let pool = pool().await;
     let queue = format!("succ-{}", Uuid::new_v4());

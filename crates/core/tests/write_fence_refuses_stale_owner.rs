@@ -12,7 +12,7 @@
 //! turned away.
 //!
 //! Requires a live database:
-//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test write_fence_refuses_stale_owner
+//!   DATABASE_URL=postgres://…/orcher cargo test -p orcher-core --test write_fence_refuses_stale_owner -- --ignored --test-threads=1
 
 use std::sync::Arc;
 
@@ -109,6 +109,7 @@ async fn status_of(pool: &PgPool, id: Uuid) -> String {
 
 /// The whole point: a superseded owner must not be able to finalise a workflow.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_superseded_owner_cannot_complete_a_workflow() {
     let pool = pool().await;
     let shard_id = 4090;
@@ -155,6 +156,7 @@ async fn a_superseded_owner_cannot_complete_a_workflow() {
 /// When the fence reports the shard lost outright, the write is refused rather
 /// than falling through to an unguarded one.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_lost_shard_refuses_rather_than_falling_back() {
     let pool = pool().await;
     let id = seed_workflow(&pool, "default").await;
@@ -189,6 +191,7 @@ async fn a_lost_shard_refuses_rather_than_falling_back() {
 /// The positive half: holding the current generation must still work, or the
 /// fence is simply breaking writes rather than authorising them.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn the_current_owner_completes_normally() {
     let pool = pool().await;
     let shard_id = 4091;
@@ -225,6 +228,7 @@ async fn the_current_owner_completes_normally() {
 /// With no fence injected — every single-node deployment — writes proceed
 /// exactly as before.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn without_a_fence_writes_are_unguarded() {
     let pool = pool().await;
     let id = seed_workflow(&pool, "default").await;
@@ -255,6 +259,7 @@ async fn without_a_fence_writes_are_unguarded() {
 /// Failing a workflow is as destructive as completing it — a superseded owner
 /// marking something failed is exactly the outcome the fence exists to stop.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_superseded_owner_cannot_fail_a_workflow() {
     let pool = pool().await;
     let shard_id = 4092;
@@ -293,6 +298,7 @@ async fn a_superseded_owner_cannot_fail_a_workflow() {
 /// The generic status update is the one most likely to be reached by a
 /// resumed node partway through a transition.
 #[tokio::test]
+#[ignore = "requires a live database"]
 async fn a_superseded_owner_cannot_move_status() {
     let pool = pool().await;
     let shard_id = 4093;
