@@ -1118,66 +1118,20 @@ impl JournalRepository {
         Ok(deleted)
     }
 
-    /// Copy journal entries up to (and including) a target event_id into a new execution.
-    ///
-    /// Used by workflow reset: the new execution gets the same journal history
-    /// up to the reset point, so replay reconstructs the state correctly.
-    /// Events after `target_event_id` are not copied.
-    ///
-    /// Returns the number of entries copied.
-    pub async fn copy_journal_up_to(
-        &self,
+    /// Copy the entries of execution `source_execution_id` (journal key
+    /// `source_workflow_id`) up to and including `target_event_id` into
+    /// execution `target_execution_id` (key `target_workflow_id`), keeping
+    /// their event ids, on `conn`: inside the transaction a reset writes the
+    /// rest of itself in. Both executions are on the database `conn` is
+    /// connected to. Returns how many were copied.
+    pub async fn copy_journal_up_to_on(
+        conn: &mut sqlx::PgConnection,
         source_workflow_id: &str,
         source_execution_id: &str,
         target_workflow_id: &str,
         target_execution_id: &str,
         target_event_id: i64,
     ) -> OrcherResult<u64> {
-        info!(
-            source_execution = %source_execution_id,
-            target_execution = %target_execution_id,
-            up_to_event = target_event_id,
-            "Copying journal entries for workflow reset"
-        );
-
-        let source = self.pool_for(source_workflow_id);
-        let target = self.pool_for(target_workflow_id);
-        if !std::ptr::eq(source, target) {
-            // Different shard pools: one statement cannot read one database
-            // and write another. Read the entries and append them to the
-            // target's pool, keeping their event ids. It ran the copy on the
-            // default pool, which with shards read nothing and wrote there.
-            let entries: Vec<JournalEntry> = sqlx::query_as::<_, JournalEntryRow>(concat!(
-                "SELECT ",
-                crate::repositories::columns::workflow_execution_journal!(),
-                " FROM workflow_execution_journal \
-                 WHERE workflow_id = $1 AND execution_id = $2 AND event_id <= $3 \
-                 ORDER BY event_id ASC"
-            ))
-            .bind(source_workflow_id)
-            .bind(source_execution_id)
-            .bind(target_event_id)
-            .fetch_all(source)
-            .await
-            .map_err(|e| OrcherError::internal(format!("Failed to read journal for reset: {}", e)))?
-            .into_iter()
-            .map(|row| {
-                let mut entry: JournalEntry = row.into();
-                entry.workflow_id = target_workflow_id.to_string();
-                entry.execution_id = target_execution_id.to_string();
-                entry
-            })
-            .collect();
-            let copied = self.append_batch(&entries).await? as u64;
-            info!(
-                source_execution = %source_execution_id,
-                target_execution = %target_execution_id,
-                copied_count = copied,
-                "Journal entries copied for reset across shard pools"
-            );
-            return Ok(copied);
-        }
-
         let result = sqlx::query(
             r#"
             INSERT INTO workflow_execution_journal (
@@ -1197,23 +1151,10 @@ impl JournalRepository {
         .bind(target_workflow_id)
         .bind(target_execution_id)
         .bind(target_event_id)
-        .execute(target)
+        .execute(&mut *conn)
         .await
-        .map_err(|e| {
-            warn!(error = %e, "Failed to copy journal entries for reset");
-            OrcherError::internal(format!("Failed to copy journal entries: {}", e))
-        })?;
-
-        let copied = result.rows_affected();
-
-        info!(
-            source_execution = %source_execution_id,
-            target_execution = %target_execution_id,
-            copied_count = copied,
-            "Journal entries copied for reset"
-        );
-
-        Ok(copied)
+        .map_err(|e| OrcherError::internal(format!("Failed to copy journal entries: {}", e)))?;
+        Ok(result.rows_affected())
     }
 }
 

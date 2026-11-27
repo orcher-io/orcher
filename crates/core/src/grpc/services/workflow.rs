@@ -17,7 +17,7 @@ use orcher_proto::orcher::v1::{
 };
 use orcher_proto::tonic::{Request, Response, Status};
 use orcher_storage::repositories::domains::workflow_execution::{
-    is_start_request_held, is_workflow_id_held, WorkflowExecutionRepository,
+    is_start_request_held, is_workflow_id_held, ResetOutcome, WorkflowExecutionRepository,
 };
 use orcher_storage::schema::types::OverlapPolicy;
 use orcher_storage::traits::domain::NamespaceRepositoryTrait;
@@ -1544,21 +1544,7 @@ impl WorkflowServiceTrait for WorkflowService {
 
         // --- Perform the reset ---
 
-        // 1. Mark old execution as "reset" (terminal state)
-        self.workflow_execution_repository
-            .update_status(
-                &execution.execution_id,
-                "reset",
-                execution.started_at,
-                Some(Timestamptz::now()),
-            )
-            .await
-            .map_err(|e| {
-                error!(error = %e, "Failed to mark execution as reset");
-                Status::internal(format!("Failed to update execution status: {}", e))
-            })?;
-
-        // 2. Create new execution with same workflow identity
+        // The run that replaces it, with the same workflow identity.
         let new_execution_id = uuid::Uuid::new_v4().to_string();
 
         let mut new_execution =
@@ -1631,48 +1617,22 @@ impl WorkflowServiceTrait for WorkflowService {
         });
         // The reset run carries the workflow on: it belongs to the same
         // organization, and takes over the workflow id's hold — the old run
-        // went terminal above, so nothing else holds it.
+        // ends in the same transaction, so nothing else holds it. It is
+        // written in one transaction with the old run, so it routes to the
+        // old run's database, which is the workflow id's when the old run
+        // holds it.
         new_execution.organization_id = execution.organization_id;
         new_execution.holds_workflow_id = execution.holds_workflow_id;
-        if let (true, Some(wf_id)) = (execution.holds_workflow_id, &execution.workflow_id) {
-            new_execution.id = orcher_common::types::identifiers::ExecutionId::from_uuid(
-                self.workflow_execution_repository.id_beside_workflow_id(
-                    execution.organization_id,
-                    &execution.namespace,
-                    wf_id,
-                    |_| uuid::Uuid::new_v4(),
-                ),
-            );
-        }
+        new_execution.id = orcher_common::types::identifiers::ExecutionId::from_uuid(
+            self.workflow_execution_repository
+                .id_beside(execution.id.as_uuid(), |_| uuid::Uuid::new_v4()),
+        );
 
-        // 3. Seed the new execution's journal BEFORE it becomes dispatchable.
-        //
-        // Creating the row with its outbox task publishes the run, and a worker
-        // can claim it immediately. If the copy ran afterwards it would race the
-        // replay: the worker starts from an empty journal and writes event 1,
-        // then the copy tries to insert its own event 1 and trips
-        // uq_journal_event_id. Seeding first means the run is only ever visible
-        // with the history it is supposed to replay.
-        //
-        // Source and destination need *different* keys: the new row carries its
-        // own internal id, so copying under the old one would leave the replay
-        // with nothing to read.
-        let new_journal_key = new_execution.id.as_uuid().to_string();
-        let copied = journal_repo
-            .copy_journal_up_to(
-                &journal_key,
-                &execution.execution_id,
-                &new_journal_key,
-                &new_execution_id,
-                req.target_event_id,
-            )
-            .await
-            .map_err(|e| {
-                error!(error = %e, "Failed to copy journal entries for reset");
-                Status::internal(format!("Failed to copy journal: {}", e))
-            })?;
-
-        // 4. Create the new execution with an outbox task for dispatch
+        // One transaction ends the old run, seeds the new one's journal,
+        // creates it with its outbox task, and journals the reset in the old
+        // run: a failure anywhere leaves the old run as it was, and the new
+        // run is never visible without the history it replays. The new run's
+        // journal is keyed by its own internal id.
         let outbox_payload = serde_json::json!({
             "execution_id": new_execution.execution_id,
             "workflow_name": new_execution.workflow_name,
@@ -1682,24 +1642,46 @@ impl WorkflowServiceTrait for WorkflowService {
             "parameters": new_execution.parameters,
         });
         let idempotency_key = format!("reset_{}", new_execution.execution_id);
-
-        self.workflow_execution_repository
-            .create_with_outbox_task(
+        let reset_entry = orcher_storage::schema::types::journal::JournalEntry::new(
+            journal_key.clone(),
+            execution.execution_id.clone(),
+            0,
+            "WorkflowExecutionReset".to_string(),
+            serde_json::json!({
+                "new_execution_id": new_execution_id,
+                "target_event_id": req.target_event_id,
+                "reason": req.reason,
+            }),
+        );
+        let copied = match self
+            .workflow_execution_repository
+            .reset_run(
+                &execution,
                 &new_execution,
+                req.target_event_id,
+                reset_entry,
                 outbox_payload,
                 idempotency_key,
-                &new_execution.task_queue,
             )
             .await
             .map_err(|e| {
-                error!(error = %e, "Failed to create reset execution");
-                Status::internal(format!("Failed to create reset execution: {}", e))
-            })?;
+                error!(error = %e, execution_id = %execution.execution_id, "Failed to reset the workflow");
+                Status::internal(format!("Failed to reset the workflow: {}", e))
+            })? {
+            ResetOutcome::Reset { copied } => copied,
+            ResetOutcome::AlreadyReplaced => {
+                return Err(Status::failed_precondition(format!(
+                    "Execution {} has already been replaced by another run; reset that run instead",
+                    execution.execution_id
+                )));
+            }
+        };
 
         // A reset child goes on in the new run; keep it its parent's child.
-        // Not fatal: the new run exists either way, and the child
-        // reconciliation sweep makes the same move when it finds the row
-        // still naming the reset run.
+        // Not part of the transaction, as the child's tracking row is kept
+        // with its parent, which can be on another database. Not fatal: the
+        // child reconciliation sweep makes the same move when it finds the
+        // row still naming the reset run.
         if let Some(ref children) = self.child_repository {
             if let Err(e) = children
                 .repoint_child_execution(&execution.execution_id, &new_execution_id)
@@ -1713,27 +1695,7 @@ impl WorkflowServiceTrait for WorkflowService {
             }
         }
 
-        // 5. Append WorkflowExecutionReset entry to the OLD execution journal
-        let reset_attrs = serde_json::json!({
-            "new_execution_id": new_execution_id,
-            "target_event_id": req.target_event_id,
-            "reason": req.reason,
-        });
-
-        let reset_entry = orcher_storage::schema::types::journal::JournalEntry::new(
-            journal_key.clone(),
-            execution.execution_id.clone(),
-            0,
-            "WorkflowExecutionReset".to_string(),
-            reset_attrs,
-        );
-
-        journal_repo.append_next(reset_entry).await.map_err(|e| {
-            warn!(error = %e, "Failed to append reset journal entry (non-fatal)");
-            Status::internal(format!("Failed to append reset journal entry: {}", e))
-        })?;
-
-        // 6. Notify pollers that work is available
+        // Tell pollers the new run is there.
         if let Some(ref polling_manager) = self.polling_manager {
             polling_manager
                 .notify_work_available(&new_execution.task_queue, &new_execution.namespace)

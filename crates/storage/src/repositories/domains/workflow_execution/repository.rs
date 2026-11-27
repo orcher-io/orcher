@@ -451,6 +451,18 @@ pub struct ListExecutionsFilters {
     pub cursor_execution_id: Option<String>,
 }
 
+/// What [`WorkflowExecutionRepository::reset_run`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResetOutcome {
+    /// The run was replaced.
+    Reset {
+        /// How many journal entries went to its successor.
+        copied: u64,
+    },
+    /// Another run had already replaced it, and nothing was written.
+    AlreadyReplaced,
+}
+
 /// Workflow execution repository
 #[derive(Clone, Debug)]
 pub struct WorkflowExecutionRepository {
@@ -1504,6 +1516,97 @@ impl WorkflowExecutionRepository {
         Ok((created_execution, task_id_result))
     }
 
+    /// Replace run `old` with `successor`, as a reset does, in one
+    /// transaction: `old` ends as `reset`, `successor` gets `old`'s journal up
+    /// to and including `target_event_id` and is created with its outbox task
+    /// (taking over the workflow id's hold when `old` had it), and
+    /// `reset_entry` is journaled in `old`. Either all of it is written or
+    /// none of it is: a reset that failed part way used to leave `old` reset
+    /// with no run to replace it.
+    ///
+    /// `old` ends only if no run has replaced it yet, read under its row lock:
+    /// a run already reset, or restarted fresh, has its successor, and a
+    /// second reset racing the first would make two. That is
+    /// [`ResetOutcome::AlreadyReplaced`], with nothing written.
+    ///
+    /// `successor` must route to `old`'s database (see [`Self::id_beside`]),
+    /// as one transaction cannot span two.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn reset_run(
+        &self,
+        old: &WorkflowExecution,
+        successor: &WorkflowExecution,
+        target_event_id: i64,
+        reset_entry: crate::schema::types::journal::JournalEntry,
+        outbox_task_payload: serde_json::Value,
+        idempotency_key: String,
+    ) -> OrcherResult<ResetOutcome> {
+        let pool = self.pool_for(None, old.id.as_uuid());
+        if !std::ptr::eq(pool, self.pool_for(None, successor.id.as_uuid())) {
+            return Err(OrcherError::internal(format!(
+                "reset run {} does not route to the database of the run it replaces, {}",
+                successor.execution_id, old.execution_id
+            )));
+        }
+        let shard_id: Option<i32> = self
+            .shard_resolver
+            .get()
+            .map(|r| r.shard_of(successor.id.as_uuid()));
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| OrcherError::internal(format!("Failed to begin the reset: {}", e)))?;
+
+        let ended = sqlx::query(
+            r#"
+            UPDATE workflow_executions
+            SET status = 'reset', completed_at = NOW()
+            WHERE id = $1 AND execution_id = $2
+              AND status NOT IN ('reset', 'restarted_fresh')
+            "#,
+        )
+        .bind(old.id.as_uuid())
+        .bind(&old.execution_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| OrcherError::internal(format!("Failed to end the reset run: {}", e)))?;
+        if ended.rows_affected() == 0 {
+            return Ok(ResetOutcome::AlreadyReplaced);
+        }
+
+        let copied =
+            crate::repositories::domains::journal::JournalRepository::copy_journal_up_to_on(
+                &mut tx,
+                &old.id.as_uuid().to_string(),
+                &old.execution_id,
+                &successor.id.as_uuid().to_string(),
+                &successor.execution_id,
+                target_event_id,
+            )
+            .await?;
+
+        insert_new_run(
+            &mut tx,
+            successor,
+            shard_id,
+            &outbox_task_payload,
+            &idempotency_key,
+            &successor.task_queue,
+        )
+        .await?;
+
+        crate::repositories::domains::journal::JournalRepository::append_next_on(
+            &mut tx,
+            reset_entry,
+        )
+        .await?;
+
+        tx.commit()
+            .await
+            .map_err(|e| OrcherError::internal(format!("Failed to commit the reset: {}", e)))?;
+        Ok(ResetOutcome::Reset { copied })
+    }
+
     /// Write `execution` as a run that ended before it began: failed for
     /// good with `reason`, under `failure_type`, holding nothing and handed
     /// to no one.
@@ -2074,11 +2177,8 @@ impl WorkflowExecutionRepository {
         organization_id: Option<Uuid>,
         namespace: &str,
         workflow_id: &str,
-        mut candidate: impl FnMut(u32) -> Uuid,
+        candidate: impl FnMut(u32) -> Uuid,
     ) -> Uuid {
-        let Some(resolver) = self.shard_resolver.get() else {
-            return candidate(0);
-        };
         let anchor = Uuid::new_v5(
             &Uuid::NAMESPACE_OID,
             format!(
@@ -2089,6 +2189,17 @@ impl WorkflowExecutionRepository {
             )
             .as_bytes(),
         );
+        self.id_beside(anchor, candidate)
+    }
+
+    /// A routing id for a new run that lands on the database the run routed
+    /// by `anchor` is on: the first of `candidate(0)`, `candidate(1)`, … that
+    /// does. A run that has to be written in one transaction with another, as
+    /// a reset run is with the run it replaces, needs one.
+    pub fn id_beside(&self, anchor: Uuid, mut candidate: impl FnMut(u32) -> Uuid) -> Uuid {
+        let Some(resolver) = self.shard_resolver.get() else {
+            return candidate(0);
+        };
         let home = resolver.pool_for_workflow(None, anchor) as *const PgPool;
         // Each candidate lands on the home database with probability 1/pools,
         // so this bound is never reached; it only keeps a broken resolver from
@@ -2100,8 +2211,8 @@ impl WorkflowExecutionRepository {
             }
         }
         warn!(
-            workflow_id = %workflow_id,
-            "No routing id found beside the workflow id; its runs may span databases"
+            anchor = %anchor,
+            "No routing id found beside the anchor; the runs may span databases"
         );
         candidate(0)
     }
