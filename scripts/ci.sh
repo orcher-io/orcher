@@ -102,6 +102,7 @@ GUARDS=(
   "Tenancy — an event by workflow id reaches only the caller's own workflow (delivery)|--test event_tenancy -- --ignored --test-threads=1"
   "Runs — a request names one run the same way in every RPC, scoped to its namespace and organization (lookup)|--lib a_request_names_the_run_the_caller_may_see -- --ignored"
   "Runs — describe, status, result, journal, logs, events, queries, updates, cancel, reset and terminate name the caller's own run (RPCs)|--test run_resolution -- --ignored --test-threads=1"
+  "Runs — a reset replaces its run in one transaction or not at all, and a run is replaced by one reset|--test reset_atomicity -- --ignored --test-threads=1"
   "Sharding — a shard's fence is readable on the database its rows live in|--lib an_acquired_generation_fences -- --ignored"
   "Sharding — a completion that reaches a non-owner commits on the owner|--test forwarded_completion_commits_on_owner -- --ignored --test-threads=1"
   "Sharding — a failed run is retried by the node that owns it|--test retry_left_to_owner -- --ignored --test-threads=1"
