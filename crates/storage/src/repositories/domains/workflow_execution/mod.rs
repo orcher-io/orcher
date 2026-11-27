@@ -42,7 +42,7 @@ pub use repository::{
     is_start_request_held, is_workflow_id_held, release_claim_to_resume_on, start_dispatch_payload,
     ActivationFence, CancelRequestTarget, ClaimFailureReason, ClaimStateCheck, DeadNode,
     DeferredResume, DueStart, HandOut, ListExecutionsFilters, PendingRequeueInfo,
-    PendingRequeueWorkflow, ReleasedClaim, Resume, RunRef, WorkflowExecutionRepository,
-    DEFAULT_IN_FLIGHT_BOUND_SECS, DEFAULT_JOURNAL_HOLD, START_REQUEST_INDEX, STILL_LIVE,
-    WORKFLOW_ID_HOLD_INDEX,
+    PendingRequeueWorkflow, ReleasedClaim, ResetOutcome, Resume, RunRef,
+    WorkflowExecutionRepository, DEFAULT_IN_FLIGHT_BOUND_SECS, DEFAULT_JOURNAL_HOLD,
+    START_REQUEST_INDEX, STILL_LIVE, WORKFLOW_ID_HOLD_INDEX,
 };
