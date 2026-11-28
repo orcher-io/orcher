@@ -683,6 +683,68 @@ impl ChildWorkflowRepository {
         Ok(moved)
     }
 
+    /// Move the children parent run `old` started at or before its event
+    /// `through_event_id` to `new`, the run a reset replaced it with. Returns
+    /// how many rows moved.
+    ///
+    /// The reset run's history is `old`'s up to that event, so it has started
+    /// those children and waits on them; the ones started later are not in
+    /// its history and stay with `old`, whose close policy applies to them.
+    /// A row already settled is opened again: its outcome was told to `old`,
+    /// after the point the new run's history stops, so the new run has not
+    /// been told, and delivery tells it. Delivery does not repeat an outcome
+    /// the copied history already holds.
+    pub async fn move_to_reset_run(
+        &self,
+        old: &str,
+        new: &str,
+        through_event_id: i64,
+    ) -> OrcherResult<u64> {
+        let mut conn =
+            self.pool.acquire().await.map_err(|e| {
+                OrcherError::internal(format!("Failed to acquire a connection: {}", e))
+            })?;
+        Self::move_to_reset_run_on(&mut conn, old, new, through_event_id).await
+    }
+
+    /// [`move_to_reset_run`](Self::move_to_reset_run) on `conn`, inside the
+    /// transaction the reset writes the rest of itself in.
+    pub async fn move_to_reset_run_on(
+        conn: &mut sqlx::PgConnection,
+        old: &str,
+        new: &str,
+        through_event_id: i64,
+    ) -> OrcherResult<u64> {
+        let moved = sqlx::query(
+            r#"
+            UPDATE child_workflow_executions
+            SET parent_execution_id = $2,
+                state = CASE WHEN state IN ('INITIATED', 'STARTED') THEN state ELSE 'STARTED' END,
+                completed_at = CASE WHEN state IN ('INITIATED', 'STARTED') THEN completed_at END,
+                updated_at = NOW()
+            WHERE parent_execution_id = $1
+              AND parent_initiated_event_id <= $3
+            "#,
+        )
+        .bind(old)
+        .bind(new)
+        .bind(through_event_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| {
+            OrcherError::internal(format!(
+                "Failed to move the children of run {} to the reset run {}: {}",
+                old, new, e
+            ))
+        })?
+        .rows_affected();
+
+        if moved > 0 {
+            debug!(old = %old, new = %new, moved, "Children moved to the reset run");
+        }
+        Ok(moved)
+    }
+
     /// Close the open row `id` with how its child ended, if it is still open.
     ///
     /// Conditional on the row being open (INITIATED or STARTED), so of any

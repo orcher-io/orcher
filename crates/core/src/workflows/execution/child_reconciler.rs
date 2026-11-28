@@ -204,6 +204,21 @@ impl ChildReconciler {
         runs: &HashMap<String, WorkflowExecution>,
         report: &mut SweepReport,
     ) -> OrcherResult<()> {
+        // A parent reset after it started the child: the child is the reset
+        // run's, and its close policy is not the old run's to apply. The row
+        // is moved, and the next pass reconciles it under the reset run.
+        if let Some(parent) = runs.get(&tracking.parent_execution_id) {
+            if self
+                .delivery
+                .follow_reset(&tracking, parent)
+                .await?
+                .is_some()
+            {
+                report.repointed += 1;
+                return Ok(());
+            }
+        }
+
         let mut run = match runs.get(&tracking.child_execution_id).cloned() {
             Some(run) => run,
             None => match self.find_unnamed_run(&tracking, runs).await? {
@@ -415,7 +430,9 @@ impl ChildReconciler {
 
 /// Whether the parent run that started a child is over: ended for good, or
 /// replaced by a successor. A successor starts its own children afresh, so a
-/// child of the replaced run is as orphaned as a child of a finished one.
+/// child of the replaced run is as orphaned as a child of a finished one —
+/// except a reset run's, which carries on the history before its reset point:
+/// the children started there are moved to it before this is asked.
 fn parent_attempt_over(parent: &WorkflowExecution) -> bool {
     run_is_final(parent) || run_was_replaced(parent)
 }

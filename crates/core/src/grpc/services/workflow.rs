@@ -1677,11 +1677,13 @@ impl WorkflowServiceTrait for WorkflowService {
             }
         };
 
-        // A reset child goes on in the new run; keep it its parent's child.
-        // Not part of the transaction, as the child's tracking row is kept
-        // with its parent, which can be on another database. Not fatal: the
-        // child reconciliation sweep makes the same move when it finds the
-        // row still naming the reset run.
+        // Child tracking kept on another database than the run's is moved
+        // here, not in the transaction. A reset child goes on in the new run,
+        // so it stays its parent's child; and the children the copied history
+        // started are the new run's (moved in the transaction when their rows
+        // are on the run's database, when this finds nothing left to move).
+        // Not fatal: delivery and the child reconciliation sweep make the
+        // same moves when they find a row still naming the reset run.
         if let Some(ref children) = self.child_repository {
             if let Err(e) = children
                 .repoint_child_execution(&execution.execution_id, &new_execution_id)
@@ -1691,6 +1693,20 @@ impl WorkflowServiceTrait for WorkflowService {
                     error = %e,
                     old_execution_id = %execution.execution_id,
                     "Could not move child tracking to the reset run; the sweep will"
+                );
+            }
+            if let Err(e) = children
+                .move_to_reset_run(
+                    &execution.execution_id,
+                    &new_execution_id,
+                    req.target_event_id,
+                )
+                .await
+            {
+                warn!(
+                    error = %e,
+                    old_execution_id = %execution.execution_id,
+                    "Could not move the reset run's children to it; the sweep will"
                 );
             }
         }
