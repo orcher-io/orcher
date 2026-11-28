@@ -3,8 +3,6 @@
 use crate::engine::queues::{TimerQueue, TimerTask};
 use orcher_common::error::OrcherResult;
 use orcher_common::types::time::Timestamptz;
-use orcher_storage::repositories::domains::coordination::CoordinationRepository;
-use orcher_storage::traits::domain::CoordinationRepositoryTrait;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, Notify};
@@ -65,11 +63,8 @@ pub struct TimerMetrics {
     /// Total timers fired successfully
     pub timers_fired: u64,
 
-    /// Total timers failed
+    /// Fires that failed and were put back to retry
     pub timers_failed: u64,
-
-    /// Total timers moved to DLQ
-    pub timers_dlq: u64,
 
     /// Total stuck timers recovered
     pub stuck_recovered: u64,
@@ -82,9 +77,6 @@ pub struct TimerMetrics {
 pub struct TimerProcessor {
     /// Timer queue
     timer_queue: TimerQueue,
-
-    /// Coordination repository (for DLQ operations)
-    coordination_repo: Arc<CoordinationRepository>,
 
     /// Configuration
     config: TimerProcessorConfig,
@@ -101,14 +93,9 @@ pub struct TimerProcessor {
 
 impl TimerProcessor {
     /// Create a new timer processor
-    pub fn new(
-        timer_queue: TimerQueue,
-        coordination_repo: Arc<CoordinationRepository>,
-        config: TimerProcessorConfig,
-    ) -> Self {
+    pub fn new(timer_queue: TimerQueue, config: TimerProcessorConfig) -> Self {
         Self {
             timer_queue,
-            coordination_repo,
             config,
             metrics: Arc::new(Mutex::new(TimerMetrics::default())),
             shutdown: Arc::new(Mutex::new(false)),
@@ -125,15 +112,8 @@ impl TimerProcessor {
     }
 
     /// Create with default configuration
-    pub fn with_defaults(
-        timer_queue: TimerQueue,
-        coordination_repo: Arc<CoordinationRepository>,
-    ) -> Self {
-        Self::new(
-            timer_queue,
-            coordination_repo,
-            TimerProcessorConfig::default(),
-        )
+    pub fn with_defaults(timer_queue: TimerQueue) -> Self {
+        Self::new(timer_queue, TimerProcessorConfig::default())
     }
 
     /// Start the processor (spawns background tasks)
@@ -344,62 +324,22 @@ impl TimerProcessor {
                 Ok(())
             }
             Err(e) => {
-                // Mark as failed (handles retry logic)
-                let error_msg = e.to_string();
-
-                match self
+                // Back in the queue, due again after a backoff. A timer is not
+                // given up on: its workflow is parked on it.
+                if let Err(mark_err) = self
                     .timer_queue
-                    .mark_failed(timer.task_id, error_msg.clone())
+                    .mark_failed(timer.task_id, e.to_string())
                     .await
                 {
-                    Ok(can_retry) => {
-                        if !can_retry {
-                            // Move to DLQ after exhausting retries using coordination repository
-                            let dlq_error_details = serde_json::json!({
-                                "error": error_msg,
-                                "attempt_count": timer.attempt_count,
-                                "max_retries": timer.max_retries,
-                                "fire_at": timer.fire_at,
-                            });
-
-                            match self
-                                .coordination_repo
-                                .move_timer_task_to_dlq(timer, dlq_error_details)
-                                .await
-                            {
-                                Ok(dlq_task) => {
-                                    info!(
-                                        timer_id = %timer.task_id,
-                                        dlq_id = %dlq_task.dlq_id,
-                                        "Moved timer to DLQ after exhausting retries"
-                                    );
-                                    let mut metrics = self.metrics.lock().await;
-                                    metrics.timers_dlq += 1;
-                                }
-                                Err(dlq_err) => {
-                                    error!(
-                                        timer_id = %timer.task_id,
-                                        error = %dlq_err,
-                                        "Failed to move timer to DLQ"
-                                    );
-                                }
-                            }
-                        }
-
-                        let mut metrics = self.metrics.lock().await;
-                        metrics.timers_failed += 1;
-
-                        Err(e)
-                    }
-                    Err(mark_err) => {
-                        error!(
-                            timer_id = %timer.task_id,
-                            error = %mark_err,
-                            "Failed to mark timer as failed"
-                        );
-                        Err(mark_err)
-                    }
+                    error!(
+                        timer_id = %timer.task_id,
+                        error = %mark_err,
+                        "Failed to put the timer back; the stuck-timer sweep will"
+                    );
+                    return Err(mark_err);
                 }
+                self.metrics.lock().await.timers_failed += 1;
+                Err(e)
             }
         }
     }
@@ -494,8 +434,7 @@ mod tests {
             orcher_storage::repositories::domains::coordination::TimerRepository::new(pool.clone()),
         );
         let timer_queue = TimerQueue::new(timer_repo);
-        let coordination_repo = Arc::new(CoordinationRepository::new(pool));
-        let processor = TimerProcessor::with_defaults(timer_queue, coordination_repo);
+        let processor = TimerProcessor::with_defaults(timer_queue);
 
         let metrics = processor.get_metrics().await;
         assert_eq!(metrics.timers_fired, 0);
@@ -510,8 +449,7 @@ mod tests {
             orcher_storage::repositories::domains::coordination::TimerRepository::new(pool.clone()),
         );
         let timer_queue = TimerQueue::new(timer_repo);
-        let coordination_repo = Arc::new(CoordinationRepository::new(pool));
-        let processor = TimerProcessor::with_defaults(timer_queue, coordination_repo);
+        let processor = TimerProcessor::with_defaults(timer_queue);
 
         // No timers should return max sleep
         let duration = processor.calculate_sleep_duration().await.unwrap();
@@ -526,11 +464,7 @@ mod tests {
             orcher_storage::repositories::domains::coordination::TimerRepository::new(pool.clone()),
         );
         let timer_queue = TimerQueue::new(timer_repo);
-        let coordination_repo = Arc::new(CoordinationRepository::new(pool));
-        let processor = Arc::new(TimerProcessor::with_defaults(
-            timer_queue,
-            coordination_repo,
-        ));
+        let processor = Arc::new(TimerProcessor::with_defaults(timer_queue));
 
         let execution_count = Arc::new(AtomicUsize::new(0));
         let exec_count = execution_count.clone();

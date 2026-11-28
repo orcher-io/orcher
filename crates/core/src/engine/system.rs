@@ -198,7 +198,6 @@ impl OrchestrationSystem {
         let timer_queue = crate::engine::queues::TimerQueue::new(timer_repo);
         let timer_processor = Arc::new(TimerProcessor::new(
             timer_queue,
-            coordination_repo.clone(),
             config.timer_processor.clone(),
         ));
 
@@ -230,14 +229,13 @@ impl OrchestrationSystem {
             )));
             shard_outbox_processors.push(Arc::new(OutboxProcessor::new(
                 obx,
-                shard_coord.clone(),
+                shard_coord,
                 config.outbox_processor.clone(),
             )));
             let tmr =
                 crate::engine::queues::TimerQueue::new(Arc::new(TimerRepository::new(sp.clone())));
             shard_timer_processors.push(Arc::new(TimerProcessor::new(
                 tmr,
-                shard_coord,
                 config.timer_processor.clone(),
             )));
         }

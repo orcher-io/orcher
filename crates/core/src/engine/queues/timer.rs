@@ -7,7 +7,7 @@ use orcher_storage::repositories::domains::coordination::TimerRepository;
 use jiff::SignedDuration;
 use orcher_common::types::time::Timestamptz;
 use std::sync::Arc;
-use tracing::{debug, warn};
+use tracing::debug;
 use uuid::Uuid;
 
 /// Timer queue for durable scheduling
@@ -125,37 +125,11 @@ impl TimerQueue {
         self.repository.complete(task_id).await
     }
 
-    /// Mark a timer as failed
-    ///
-    /// If the task has remaining retries, it will be scheduled for retry.
-    /// Otherwise, it will be marked as permanently failed.
-    ///
-    /// # Arguments
-    ///
-    /// * `task_id` - The task ID to mark as failed
-    /// * `error_msg` - The error message
-    ///
-    /// # Returns
-    ///
-    /// `true` if the task can be retried, `false` if it should be moved to DLQ
+    /// Put a timer whose fire failed back in the queue, due again after a
+    /// backoff; it is retried until it fires. Returns whether this attempt
+    /// still held it and put it back.
     pub async fn mark_failed(&self, task_id: Uuid, error_msg: String) -> OrcherResult<bool> {
-        // Get the task to check if it can be retried
-        let task = self.repository.find_by_id(task_id).await?;
-
-        let task = match task {
-            Some(t) => t,
-            None => {
-                warn!(task_id = %task_id, "Timer not found when marking as failed");
-                return Ok(false);
-            }
-        };
-
-        let can_retry = task.can_retry();
-
-        // Delegate to repository to handle the failure logic
-        self.repository.fail(task_id, error_msg).await?;
-
-        Ok(can_retry)
+        self.repository.fail(task_id, error_msg).await
     }
 
     /// Move a failed timer to the dead letter queue

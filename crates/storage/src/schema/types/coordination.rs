@@ -273,6 +273,7 @@ pub struct TimerTask {
     pub processing_started_at: Option<Timestamptz>,
     pub completed_at: Option<Timestamptz>,
     pub attempt_count: i32,
+    /// Not a limit: a timer whose fire fails is retried until it fires.
     pub max_retries: i32,
     pub last_error: Option<String>,
     #[serde(default)]
@@ -353,10 +354,6 @@ impl TimerTask {
         self.status == TaskStatus::Cancelled
     }
 
-    pub fn can_retry(&self) -> bool {
-        self.attempt_count < self.max_retries
-    }
-
     pub fn is_terminal(&self) -> bool {
         matches!(
             self.status,
@@ -379,10 +376,6 @@ impl Validatable for TimerTask {
 
         if self.max_retries < 0 {
             result.add_error("max_retries", "Max retries cannot be negative");
-        }
-
-        if self.attempt_count > self.max_retries + 1 {
-            result.add_error("attempt_count", "Attempt count exceeds max retries + 1");
         }
 
         // A fire time before the created time is not an error: a short timer
@@ -612,7 +605,6 @@ mod tests {
 
         assert!(task.is_pending());
         assert!(!task.is_ready()); // Not ready yet (60 seconds in future)
-        assert!(task.can_retry());
         assert!(!task.is_terminal());
     }
 
