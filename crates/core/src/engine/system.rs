@@ -613,6 +613,7 @@ impl OrchestrationSystem {
     where
         F: Fn(
                 orcher_storage::schema::types::Schedule,
+                Vec<String>,
             ) -> std::pin::Pin<
                 Box<dyn std::future::Future<Output = OrcherResult<uuid::Uuid>> + Send>,
             > + Send

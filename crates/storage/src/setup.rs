@@ -88,6 +88,7 @@ use crate::migrations::sql::postgres::{
     V084_DROP_WORKFLOW_FAILED_NOTIFY, V085_ORGANIZATION_IDS_ARE_OPAQUE,
     V086_JOURNAL_HOLDER_PREFERENCE, V087_ACTIVATION_JOURNAL_POSITION,
     V088_TASK_SCHEDULED_THROUGH_ENTRY, V089_OUTBOX_ANALYZED_AFTER_A_THOUSAND_CHANGES,
+    V090_SCHEDULE_FIRES_LINK_THEIR_RUNS,
 };
 use crate::OrcherResult;
 use sqlx::migrate::MigrateDatabase;
@@ -806,6 +807,11 @@ fn get_migrations() -> Vec<MigrationDef> {
             version: 89,
             description: "outbox_analyzed_after_a_thousand_changes",
             sql: V089_OUTBOX_ANALYZED_AFTER_A_THOUSAND_CHANGES,
+        },
+        MigrationDef {
+            version: 90,
+            description: "schedule_fires_link_their_runs",
+            sql: V090_SCHEDULE_FIRES_LINK_THEIR_RUNS,
         },
     ]
 }

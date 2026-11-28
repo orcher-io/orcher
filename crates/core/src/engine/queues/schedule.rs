@@ -68,26 +68,33 @@ impl ScheduleQueue {
         Ok(count as usize)
     }
 
-    /// Count active (running) instances for a schedule.
-    pub async fn count_active_instances(&self, schedule_id: ScheduleId) -> OrcherResult<i64> {
-        self.repository.count_active_instances(schedule_id).await
+    /// The runs this schedule started that are still open, by execution id.
+    pub async fn open_runs(&self, schedule_id: ScheduleId) -> OrcherResult<Vec<String>> {
+        self.repository.open_runs(schedule_id).await
     }
 
-    /// Insert a schedule execution record.
+    /// Put a claimed schedule back unfired, due again at `next_run_at`.
+    pub async fn release_unfired(
+        &self,
+        schedule_id: ScheduleId,
+        next_run_at: Option<Timestamptz>,
+    ) -> OrcherResult<()> {
+        self.repository
+            .release_unfired(schedule_id, next_run_at)
+            .await
+    }
+
+    /// Record a fire and the run it started (`workflow_executions.id`), if
+    /// it started one.
     pub async fn insert_execution(
         &self,
         schedule_id: ScheduleId,
         execution_number: i64,
         scheduled_at: Timestamptz,
-        workflow_execution_id: Option<uuid::Uuid>,
+        run: Option<uuid::Uuid>,
     ) -> OrcherResult<uuid::Uuid> {
         self.repository
-            .insert_execution(
-                schedule_id,
-                execution_number,
-                scheduled_at,
-                workflow_execution_id,
-            )
+            .insert_execution(schedule_id, execution_number, scheduled_at, run)
             .await
     }
 

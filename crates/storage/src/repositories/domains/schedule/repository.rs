@@ -269,43 +269,127 @@ impl ScheduleRepository {
         Ok(())
     }
 
-    /// Count active instances for a schedule (for overlap policy checks).
-    pub async fn count_active_instances(&self, schedule_id: ScheduleId) -> OrcherResult<i64> {
-        let count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM schedule_instances WHERE schedule_id = $1 AND status = 'running'",
+    /// Put a claimed schedule back without firing it, due again at
+    /// `next_run_at`: a tick its overlap policy skipped or held. Unlike
+    /// [`Self::mark_fired`] it counts no run, so a skipped tick does not use
+    /// up `max_runs`.
+    pub async fn release_unfired(
+        &self,
+        schedule_id: ScheduleId,
+        next_run_at: Option<Timestamptz>,
+    ) -> OrcherResult<()> {
+        sqlx::query(
+            "UPDATE schedules SET status = 'active', next_run_at = $1, updated_at = NOW() \
+             WHERE id = $2",
         )
+        .bind(next_run_at)
         .bind(schedule_id.as_uuid())
-        .fetch_one(&self.pool)
+        .execute(&self.pool)
         .await
         .map_err(|e| {
             orcher_common::error::OrcherError::internal(format!(
-                "Failed to count active instances: {}",
+                "Failed to release an unfired schedule: {}",
                 e
             ))
         })?;
-
-        Ok(count)
+        Ok(())
     }
 
-    /// Insert a schedule execution record.
+    /// The runs this schedule started that are still open, by execution id:
+    /// what its overlap policy is decided on.
+    ///
+    /// A fire links the run it started (`workflow_execution_id`). A run is
+    /// open while it, or a run that carries on its workflow id after it (a
+    /// retry, a reset, a fresh restart), is still live. A fire whose runs have
+    /// all ended is settled here, to how the last of them ended, so the check
+    /// only ever reads the fires still open rather than the schedule's whole
+    /// history.
+    pub async fn open_runs(&self, schedule_id: ScheduleId) -> OrcherResult<Vec<String>> {
+        use crate::repositories::domains::workflow_execution::repository::STILL_LIVE;
+        // The runs of one fire: the one it started and every run since under
+        // the same workflow id, in its organization and namespace.
+        const SAME_WORKFLOW: &str = "(id = fired.run_id OR (workflow_id = fired.workflow_id \
+             AND namespace = fired.namespace \
+             AND organization_id IS NOT DISTINCT FROM fired.organization_id))";
+        let sql = format!(
+            r#"
+            WITH fired AS (
+                SELECT se.id, f.id AS run_id, f.workflow_id, f.namespace, f.organization_id
+                FROM schedule_executions se
+                JOIN workflow_executions f ON f.id = se.workflow_execution_id
+                WHERE se.schedule_id = $1 AND se.status = 'running'
+            ),
+            open AS (
+                SELECT fired.id AS fire_id, run.execution_id
+                FROM fired
+                JOIN LATERAL (
+                    SELECT execution_id FROM workflow_executions
+                    WHERE {SAME_WORKFLOW} AND {STILL_LIVE}
+                ) run ON TRUE
+            ),
+            settled AS (
+                UPDATE schedule_executions se
+                SET status = last.outcome, completed_at = last.ended_at
+                FROM fired
+                CROSS JOIN LATERAL (
+                    SELECT CASE status
+                               WHEN 'completed' THEN 'completed'
+                               WHEN 'cancelled' THEN 'cancelled'
+                               WHEN 'terminated' THEN 'cancelled'
+                               ELSE 'failed'
+                           END AS outcome,
+                           COALESCE(completed_at, NOW()) AS ended_at
+                    FROM workflow_executions
+                    WHERE {SAME_WORKFLOW}
+                    ORDER BY submitted_at DESC, id DESC
+                    LIMIT 1
+                ) last
+                WHERE se.id = fired.id
+                  AND NOT EXISTS (SELECT 1 FROM open WHERE open.fire_id = fired.id)
+                RETURNING se.id
+            )
+            SELECT DISTINCT execution_id FROM open
+            "#
+        );
+        sqlx::query_scalar::<_, String>(&sql)
+            .bind(schedule_id.as_uuid())
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| {
+                orcher_common::error::OrcherError::internal(format!(
+                    "Failed to read a schedule's open runs: {}",
+                    e
+                ))
+            })
+    }
+
+    /// Record a fire: the run it started, by its row id
+    /// (`workflow_executions.id`), or none when the start failed, which ends
+    /// the fire as failed.
     pub async fn insert_execution(
         &self,
         schedule_id: ScheduleId,
         execution_number: i64,
         scheduled_at: Timestamptz,
-        workflow_execution_id: Option<uuid::Uuid>,
+        run: Option<uuid::Uuid>,
     ) -> OrcherResult<uuid::Uuid> {
         let id = uuid::Uuid::new_v4();
 
         sqlx::query(
             r#"
-            INSERT INTO schedule_executions (id, schedule_id, task_id, execution_number, scheduled_at, status, trigger_type)
-            VALUES ($1, $2, $3, $4, $5, 'running', 'cron')
+            INSERT INTO schedule_executions
+                (id, schedule_id, workflow_execution_id, execution_number, scheduled_at,
+                 started_at, completed_at, status, trigger_type)
+            VALUES ($1, $2, $3, $4, $5,
+                    CASE WHEN $3::uuid IS NULL THEN NULL ELSE NOW() END,
+                    CASE WHEN $3::uuid IS NULL THEN NOW() END,
+                    CASE WHEN $3::uuid IS NULL THEN 'failed' ELSE 'running' END,
+                    'cron')
             "#,
         )
         .bind(id)
         .bind(schedule_id.as_uuid())
-        .bind(workflow_execution_id)
+        .bind(run)
         .bind(execution_number)
         .bind(scheduled_at)
         .execute(&self.pool)

@@ -92,6 +92,7 @@ run_check() {
 GUARDS=(
   "Tenancy — a caller sees only its own workers|--lib workers::tests::tenancy -- --ignored --test-threads=1"
   "Tenancy — a schedule name belongs to an organisation|--lib schedule::repository::tenancy -- --ignored --test-threads=1"
+  "Schedules — an overlap policy sees the runs a schedule's last fires started, and skips, holds, replaces or caps by them|--test schedule_overlap -- --ignored --test-threads=1"
   "Batches — a batch never overwrites a run that already ended, even one ending mid-statement, and acts on one organisation's work|--test batch_status_skips_terminal -- --ignored --test-threads=1"
   "Lifecycle — worker health and the silent-worker sweep|--lib worker::repository -- --ignored --test-threads=1"
   "Journal — concurrent appends all land, a repeated outcome lands once|--lib journal::repository -- --ignored --test-threads=1"

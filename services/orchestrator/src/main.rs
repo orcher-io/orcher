@@ -1829,7 +1829,9 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
     info!("Starting ScheduleProcessor with ScheduleExecutionService");
     {
         let schedule_execution = schedule_execution_service.clone();
-        let schedule_executor = move |schedule: orcher_storage::schema::types::Schedule| -> std::pin::Pin<
+        let schedule_executor = move |schedule: orcher_storage::schema::types::Schedule,
+                                      replacing: Vec<String>|
+              -> std::pin::Pin<
             Box<
                 dyn std::future::Future<
                         Output = orcher_common::OrcherResult<orcher_common::uuid::Uuid>,
@@ -1837,7 +1839,7 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
             >,
         > {
             let service = schedule_execution.clone();
-            Box::pin(async move { service.execute_schedule(schedule).await })
+            Box::pin(async move { service.execute_schedule(schedule, replacing).await })
         };
 
         orchestration_system

@@ -461,6 +461,12 @@ pub mod sql {
         /// for within one autovacuum round, however large the outbox.
         pub const V089_OUTBOX_ANALYZED_AFTER_A_THOUSAND_CHANGES: &str =
             include_str!("sql/postgres/V089__outbox_analyzed_after_a_thousand_changes.sql");
+
+        /// V090 — a schedule's fires link the run they started by
+        /// `workflow_execution_id`, the link its overlap check reads; the fires
+        /// recorded under `task_id` are moved to it.
+        pub const V090_SCHEDULE_FIRES_LINK_THEIR_RUNS: &str =
+            include_str!("sql/postgres/V090__schedule_fires_link_their_runs.sql");
     }
 }
 
