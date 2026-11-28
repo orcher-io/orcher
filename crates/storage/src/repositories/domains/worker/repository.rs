@@ -513,7 +513,12 @@ impl WorkerRepository {
                 last_heartbeat, health_status, health_details,
                 created_at, updated_at, registered_at
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
+                -- Registering is the worker's first report, so it counts as
+                -- its first heartbeat. Heartbeats reach this row only every
+                -- few, and a worker killed before one did kept no time at
+                -- all, which nothing could ever age out.
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+                COALESCE($17, NOW()), $18, $19,
                 NOW(), NOW(), NOW()
             )
             ON CONFLICT (worker_id) DO UPDATE SET
@@ -568,6 +573,11 @@ impl WorkerRepository {
     /// the engine had dropped workers from an in-memory map and never touched
     /// these rows.
     ///
+    /// A row with no heartbeat time is judged by when the worker registered.
+    /// Such rows were written by engines that stored none at registration;
+    /// compared directly, a NULL time is never older than anything, and those
+    /// workers stayed `idle` however long they had been dead.
+    ///
     /// Returns (degraded, offline) row counts.
     pub async fn age_out_silent_workers(
         &self,
@@ -584,7 +594,8 @@ impl WorkerRepository {
                 -- work it cannot be doing.
                 current_task_count = 0,
                 updated_at = NOW()
-            WHERE last_heartbeat < NOW() - make_interval(secs => $1::double precision)
+            WHERE COALESCE(last_heartbeat, registered_at, created_at)
+                  < NOW() - make_interval(secs => $1::double precision)
               AND (status <> 'offline' OR health_status <> 'unhealthy' OR current_task_count <> 0)
             "#,
         )
@@ -602,8 +613,10 @@ impl WorkerRepository {
             r#"
             UPDATE workers
             SET health_status = 'degraded', updated_at = NOW()
-            WHERE last_heartbeat < NOW() - make_interval(secs => $1::double precision)
-              AND last_heartbeat >= NOW() - make_interval(secs => $2::double precision)
+            WHERE COALESCE(last_heartbeat, registered_at, created_at)
+                  < NOW() - make_interval(secs => $1::double precision)
+              AND COALESCE(last_heartbeat, registered_at, created_at)
+                  >= NOW() - make_interval(secs => $2::double precision)
               AND health_status <> 'degraded'
             "#,
         )
@@ -1534,6 +1547,65 @@ mod tests {
         assert_eq!((d2, o2), (0, 0));
 
         for id in [&live, &late, &gone] {
+            forget(&repo, id).await;
+        }
+    }
+
+    async fn last_heartbeat_is_set(repo: &WorkerRepository, worker_id: &str) -> bool {
+        sqlx::query_scalar("SELECT last_heartbeat IS NOT NULL FROM workers WHERE worker_id = $1")
+            .bind(worker_id)
+            .fetch_one(repo.pool())
+            .await
+            .expect("read the heartbeat time")
+    }
+
+    /// Heartbeats reach the row only every few, so a worker killed before
+    /// one did kept no heartbeat time, and the sweep, comparing that time,
+    /// never aged it out: dead workers listed as idle for ever.
+    #[tokio::test]
+    #[ignore] // Requires database
+    async fn registering_records_a_first_heartbeat() {
+        let repo = test_repo().await;
+        let id = format!("first-hb-{}", Uuid::new_v4());
+        a_registered_worker(&repo, &id).await;
+        assert!(last_heartbeat_is_set(&repo, &id).await);
+        forget(&repo, &id).await;
+    }
+
+    /// Rows an earlier engine wrote with no heartbeat time are judged by when
+    /// the worker registered: one registered an hour ago goes offline, one
+    /// registered just now is left alone.
+    #[tokio::test]
+    #[ignore] // Requires database
+    async fn a_worker_with_no_heartbeat_time_is_aged_by_its_registration() {
+        let repo = test_repo().await;
+        let old = format!("never-hb-old-{}", Uuid::new_v4());
+        let new = format!("never-hb-new-{}", Uuid::new_v4());
+        for (id, registered_secs_ago) in [(&old, 3600.0), (&new, 0.0)] {
+            a_registered_worker(&repo, id).await;
+            sqlx::query(
+                "UPDATE workers SET last_heartbeat = NULL, \
+                 registered_at = NOW() - make_interval(secs => $1::double precision), \
+                 created_at = NOW() - make_interval(secs => $1::double precision) \
+                 WHERE worker_id = $2",
+            )
+            .bind(registered_secs_ago)
+            .bind(id)
+            .execute(repo.pool())
+            .await
+            .expect("write a row as an earlier engine did");
+        }
+
+        repo.age_out_silent_workers(60, 300)
+            .await
+            .expect("age out silent workers");
+
+        assert_eq!(
+            row(&repo, &old).await,
+            ("offline".to_string(), "unhealthy".to_string())
+        );
+        assert_eq!(row(&repo, &new).await.0, "idle");
+        for id in [&old, &new] {
             forget(&repo, id).await;
         }
     }
