@@ -6,15 +6,20 @@ use orcher_core::grpc::auth_layer::AuthMode;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct OrchestratorConfig {
+    #[serde(default)]
     pub server: ServerConfig,
+    #[serde(default)]
     pub orchestrator: OrchestratorCoreConfig,
+    #[serde(default)]
     pub storage: StorageConfig,
+    #[serde(default)]
     pub logging: LoggingConfig,
+    #[serde(default)]
     pub health: HealthConfig,
-    // Tuning sections: every field has a default, so a file that leaves the
-    // whole section out means "the defaults", the same as an empty one.
+    // Every section has a default, so a file that leaves sections out means
+    // "the defaults", the same as an empty one.
     // Without this a file had to name each section merely to say nothing
     // about it, and the shipped config.toml failed to parse the first time
     // it was read.
@@ -208,33 +213,130 @@ impl Default for SecurityConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
+    #[serde(default = "default_grpc_addr")]
     pub grpc_addr: String,
+    #[serde(default = "default_http_addr")]
     pub http_addr: String,
+    #[serde(default = "default_max_concurrent_streams")]
     pub max_concurrent_streams: u32,
+}
+
+// This machine only: a deployment that serves others says so,
+// and authenticates them (see `exposes_unauthenticated_api`).
+fn default_grpc_addr() -> String {
+    "127.0.0.1:50051".to_string()
+}
+
+// This machine only: a deployment that serves others says so,
+// and authenticates them (see `exposes_unauthenticated_api`).
+fn default_http_addr() -> String {
+    "127.0.0.1:8080".to_string()
+}
+
+fn default_max_concurrent_streams() -> u32 {
+    1000
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            grpc_addr: default_grpc_addr(),
+            http_addr: default_http_addr(),
+            max_concurrent_streams: default_max_concurrent_streams(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestratorCoreConfig {
+    #[serde(default = "default_max_workers")]
     pub max_workers: usize,
+    #[serde(default = "default_max_concurrent_tasks")]
     pub max_concurrent_tasks: usize,
+    #[serde(default = "default_orchestrator_heartbeat_timeout_secs")]
     pub heartbeat_timeout_secs: u64,
+}
+
+fn default_max_workers() -> usize {
+    100
+}
+
+fn default_max_concurrent_tasks() -> usize {
+    1000
+}
+
+fn default_orchestrator_heartbeat_timeout_secs() -> u64 {
+    90
+}
+
+impl Default for OrchestratorCoreConfig {
+    fn default() -> Self {
+        Self {
+            max_workers: default_max_workers(),
+            max_concurrent_tasks: default_max_concurrent_tasks(),
+            heartbeat_timeout_secs: default_orchestrator_heartbeat_timeout_secs(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageConfig {
+    #[serde(default = "default_database_url")]
     pub database_url: String,
+}
+
+fn default_database_url() -> String {
+    "postgresql://localhost/orcher".to_string()
+}
+
+impl Default for StorageConfig {
+    fn default() -> Self {
+        Self {
+            database_url: default_database_url(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoggingConfig {
+    #[serde(default = "default_logging_level")]
     pub level: String,
+    #[serde(default = "default_logging_format")]
     pub format: String,
+}
+
+fn default_logging_level() -> String {
+    "info".to_string()
+}
+
+fn default_logging_format() -> String {
+    "json".to_string()
+}
+
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        Self {
+            level: default_logging_level(),
+            format: default_logging_format(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HealthConfig {
+    #[serde(default = "default_enabled")]
     pub readiness_enabled: bool,
+    #[serde(default = "default_enabled")]
     pub liveness_enabled: bool,
+}
+
+impl Default for HealthConfig {
+    fn default() -> Self {
+        Self {
+            readiness_enabled: default_enabled(),
+            liveness_enabled: default_enabled(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -823,46 +925,6 @@ impl PollingConfig {
     }
 }
 
-impl Default for OrchestratorConfig {
-    fn default() -> Self {
-        Self {
-            server: ServerConfig {
-                // This machine only: a deployment that serves others says so,
-                // and authenticates them (see `exposes_unauthenticated_api`).
-                grpc_addr: "127.0.0.1:50051".to_string(),
-                http_addr: "127.0.0.1:8080".to_string(),
-                max_concurrent_streams: 1000,
-            },
-            orchestrator: OrchestratorCoreConfig {
-                max_workers: 100,
-                max_concurrent_tasks: 1000,
-                heartbeat_timeout_secs: 90,
-            },
-            storage: StorageConfig {
-                database_url: "postgresql://localhost/orcher".to_string(),
-            },
-            logging: LoggingConfig {
-                level: "info".to_string(),
-                format: "json".to_string(),
-            },
-            health: HealthConfig {
-                readiness_enabled: true,
-                liveness_enabled: true,
-            },
-            polling: PollingConfig::default(),
-            timeout_watcher: TimeoutWatcherConfig::default(),
-            workflow_retry: WorkflowRetryConfig::default(),
-            child_reconciler: ChildReconcilerConfig::default(),
-            worker_liveness: WorkerLivenessConfig::default(),
-            background_jobs: BackgroundJobsConfig::default(),
-            security: SecurityConfig::default(),
-            cluster: ClusterSettings::default(),
-            limits: LimitsConfig::default(),
-            ui: UiConfig::default(),
-        }
-    }
-}
-
 impl OrchestratorConfig {
     /// Create a configuration optimized for development and testing
     ///
@@ -1167,6 +1229,7 @@ mod tests {
         assert_eq!(config.server.grpc_addr, "127.0.0.1:50051");
         assert_eq!(config.server.http_addr, "127.0.0.1:8080");
         assert_eq!(config.orchestrator.max_workers, 100);
+        assert_eq!(config.orchestrator.heartbeat_timeout_secs, 90);
     }
 
     #[test]
@@ -1554,6 +1617,63 @@ mod section_defaults {
         // And the release of a dead worker process's claims, on.
         assert!(config.worker_liveness.enabled);
         assert_eq!(config.worker_liveness.lapse_secs(), 15);
+    }
+
+    #[test]
+    fn a_file_with_only_security_section_parses_and_defaults_the_rest() {
+        let toml = r#"
+            [security]
+            auth_mode = "none"
+        "#;
+        let config: OrchestratorConfig =
+            toml::from_str(toml).expect("config with only security section parses");
+        assert_eq!(config.security.auth_mode, super::AuthMode::None);
+        assert_eq!(config.server.grpc_addr, "127.0.0.1:50051");
+        assert_eq!(config.server.http_addr, "127.0.0.1:8080");
+        assert_eq!(config.orchestrator.max_workers, 100);
+        assert_eq!(config.orchestrator.heartbeat_timeout_secs, 90);
+        assert_eq!(config.storage.database_url, "postgresql://localhost/orcher");
+        assert_eq!(config.logging.level, "info");
+        assert!(config.health.readiness_enabled);
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn an_empty_config_file_parses_and_matches_default() {
+        let toml = "";
+        let config: OrchestratorConfig = toml::from_str(toml).expect("empty config parses");
+        let default_config = OrchestratorConfig::default();
+        assert_eq!(
+            toml::to_string(&config).expect("serialize parsed"),
+            toml::to_string(&default_config).expect("serialize default")
+        );
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn a_partly_filled_section_defaults_its_omitted_fields_and_other_sections() {
+        let toml = r#"
+            [server]
+            grpc_addr = "0.0.0.0:50051"
+        "#;
+        let config: OrchestratorConfig =
+            toml::from_str(toml).expect("partly filled server section parses");
+        let default_config = OrchestratorConfig::default();
+        assert_eq!(config.server.grpc_addr, "0.0.0.0:50051");
+        assert_eq!(config.server.http_addr, default_config.server.http_addr);
+        assert_eq!(
+            config.server.max_concurrent_streams,
+            default_config.server.max_concurrent_streams
+        );
+        assert_eq!(
+            config.orchestrator.heartbeat_timeout_secs,
+            default_config.orchestrator.heartbeat_timeout_secs
+        );
+        assert_eq!(
+            config.storage.database_url,
+            default_config.storage.database_url
+        );
+        assert!(config.validate().is_ok());
     }
 
     #[test]
