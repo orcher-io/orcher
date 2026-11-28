@@ -1,5 +1,6 @@
 //! Timer queue processor for scheduled events.
 
+use crate::engine::loops::Loops;
 use crate::engine::queues::{TimerQueue, TimerTask};
 use orcher_common::error::OrcherResult;
 use orcher_common::types::time::Timestamptz;
@@ -97,6 +98,9 @@ pub struct TimerProcessor {
 
     /// Signalled when a timer is scheduled, to cut the idle sleep short.
     wake: Arc<Notify>,
+
+    /// The processing and cleanup loops, once started.
+    loops: Loops,
 }
 
 impl TimerProcessor {
@@ -113,6 +117,7 @@ impl TimerProcessor {
             metrics: Arc::new(Mutex::new(TimerMetrics::default())),
             shutdown: Arc::new(Mutex::new(false)),
             wake: Arc::new(Notify::new()),
+            loops: Loops::new(),
         }
     }
 
@@ -154,13 +159,13 @@ impl TimerProcessor {
         // Spawn processing loop
         let processor = self.clone();
         let exec = executor.clone();
-        tokio::spawn(async move {
+        self.loops.spawn("timer processing", async move {
             processor.run_processing_loop(exec).await;
         });
 
         // Spawn cleanup loop
         let processor = self.clone();
-        tokio::spawn(async move {
+        self.loops.spawn("timer cleanup", async move {
             processor.run_cleanup_loop().await;
         });
 
@@ -170,7 +175,13 @@ impl TimerProcessor {
     /// Signal shutdown
     pub async fn shutdown(&self) {
         info!("Shutting down timer processor");
+        self.loops.stop();
         *self.shutdown.lock().await = true;
+    }
+
+    /// The processor's loops, to ask whether they still run.
+    pub fn loops(&self) -> &Loops {
+        &self.loops
     }
 
     /// Get current metrics
@@ -479,6 +490,35 @@ mod tests {
     }
 
     use super::*;
+
+    /// The processor's loops are watched from the moment it starts, and once
+    /// it is asked to stop their ending is not a failure.
+    #[tokio::test]
+    async fn its_loops_are_watched_once_started() {
+        let pool = Arc::new(
+            sqlx::postgres::PgPoolOptions::new()
+                .acquire_timeout(Duration::from_millis(200))
+                .connect_lazy("postgresql://orcher@127.0.0.1:1/orcher")
+                .unwrap(),
+        );
+        let timers = Arc::new(
+            orcher_storage::repositories::domains::coordination::TimerRepository::new(pool.clone()),
+        );
+        let processor = Arc::new(TimerProcessor::with_defaults(
+            TimerQueue::new(timers),
+            Arc::new(CoordinationRepository::new(pool)),
+        ));
+        assert!(!processor.loops().started());
+        processor
+            .clone()
+            .start(|_| Box::pin(async { Ok(()) }))
+            .await
+            .expect("start");
+        assert!(processor.loops().started());
+        assert!(processor.loops().exited().is_empty());
+        processor.shutdown().await;
+        assert!(processor.loops().stopping());
+    }
     use sqlx::PgPool;
     use std::sync::atomic::{AtomicUsize, Ordering};
 

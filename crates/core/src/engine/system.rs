@@ -1,6 +1,7 @@
 //! Engine system lifecycle and background task management.
 
 use crate::engine::coordinator::{CoordinatorConfig, WorkflowCoordinator};
+use crate::engine::loops::Loops;
 use crate::engine::processors::{
     OutboxProcessor, OutboxProcessorConfig, ScheduleProcessor, ScheduleProcessorConfig,
     TimerProcessor, TimerProcessorConfig,
@@ -86,6 +87,9 @@ pub struct SystemHealth {
     /// Schedule processor state
     pub schedule_state: ProcessorState,
 
+    /// The processor loops that have ended without being asked to.
+    pub exited_loops: Vec<&'static str>,
+
     /// Overall system is healthy
     pub healthy: bool,
 
@@ -100,6 +104,22 @@ impl SystemHealth {
             && self.coordinator_healthy
             && self.outbox_state == ProcessorState::Running
             && self.timer_state == ProcessorState::Running
+    }
+}
+
+/// How long a health check waits for the database to answer.
+pub const DATABASE_CHECK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// The state of a processor from the loops of each of its instances.
+fn loop_state(loops: &[&Loops]) -> ProcessorState {
+    if !loops.iter().any(|l| l.started()) {
+        ProcessorState::Stopped
+    } else if loops.iter().any(|l| !l.exited().is_empty()) {
+        ProcessorState::Failed
+    } else if loops.iter().any(|l| l.stopping()) {
+        ProcessorState::ShuttingDown
+    } else {
+        ProcessorState::Running
     }
 }
 
@@ -417,41 +437,68 @@ impl OrchestrationSystem {
         Ok(())
     }
 
-    /// Get system health status
+    /// The system's health: whether its database answers, and whether each
+    /// processor's loops — on every shard database — still run.
+    ///
+    /// A processor is `Running` once started while all its loops do, `Failed`
+    /// when one of them has ended without being asked to, `ShuttingDown` once
+    /// asked to stop, and `Stopped` before it is started. It used to count as
+    /// running as long as a task had been spawned to start it, a task that
+    /// finished at once, so a processor whose loop had panicked looked healthy.
     pub async fn health(&self) -> SystemHealth {
-        let outbox_state = if self.outbox_handle.read().await.is_some() {
-            ProcessorState::Running
-        } else {
-            ProcessorState::Stopped
-        };
+        let (outbox, timer, schedule) = self.processor_loops();
+        let outbox_state = loop_state(&outbox);
+        let timer_state = loop_state(&timer);
+        let schedule_state = loop_state(&schedule);
+        let exited_loops = self.exited_loops();
 
-        let timer_state = if self.timer_handle.read().await.is_some() {
-            ProcessorState::Running
-        } else {
-            ProcessorState::Stopped
-        };
-
-        let schedule_state = if self.schedule_handle.read().await.is_some() {
-            ProcessorState::Running
-        } else {
-            ProcessorState::Stopped
-        };
-
-        let coordinator_healthy = sqlx::query("SELECT 1").execute(&*self.pool).await.is_ok();
-        let healthy = coordinator_healthy
-            && (outbox_state == ProcessorState::Running || outbox_state == ProcessorState::Stopped)
-            && (timer_state == ProcessorState::Running || timer_state == ProcessorState::Stopped)
-            && (schedule_state == ProcessorState::Running
-                || schedule_state == ProcessorState::Stopped);
+        // Bounded: a database that does not answer must not hold the probe
+        // asking about it past the probe's own timeout.
+        let coordinator_healthy = matches!(
+            tokio::time::timeout(
+                DATABASE_CHECK_TIMEOUT,
+                sqlx::query("SELECT 1").execute(&*self.pool)
+            )
+            .await,
+            Ok(Ok(_))
+        );
+        let healthy = coordinator_healthy && exited_loops.is_empty();
 
         SystemHealth {
             coordinator_healthy,
             outbox_state,
             timer_state,
             schedule_state,
+            exited_loops,
             healthy,
             checked_at: Timestamptz::now(),
         }
+    }
+
+    /// The processor loops, on every shard database, that have ended without
+    /// being asked to. Asks nothing of the database, so a liveness check can
+    /// use it however the database is doing.
+    pub fn exited_loops(&self) -> Vec<&'static str> {
+        let (outbox, timer, schedule) = self.processor_loops();
+        outbox
+            .iter()
+            .chain(timer.iter())
+            .chain(schedule.iter())
+            .flat_map(|loops| loops.exited())
+            .collect()
+    }
+
+    /// The outbox, timer and schedule processors' loops, every instance.
+    #[allow(clippy::type_complexity)]
+    fn processor_loops(&self) -> (Vec<&Loops>, Vec<&Loops>, Vec<&Loops>) {
+        let outbox: Vec<&Loops> = std::iter::once(self.outbox_processor.loops())
+            .chain(self.shard_outbox_processors.iter().map(|p| p.loops()))
+            .collect();
+        let timer: Vec<&Loops> = std::iter::once(self.timer_processor.loops())
+            .chain(self.shard_timer_processors.iter().map(|p| p.loops()))
+            .collect();
+        let schedule = vec![self.schedule_processor.loops()];
+        (outbox, timer, schedule)
     }
 
     /// Check if the system is operational
@@ -977,5 +1024,31 @@ mod tests {
     #[ignore = "requires PostgreSQL"]
     async fn test_system_health_check() {
         // TODO: Implement with test database
+    }
+}
+
+#[cfg(test)]
+mod loop_state_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_processor_is_failed_when_a_loop_of_any_instance_has_died() {
+        let primary = Loops::new();
+        let shard = Loops::new();
+        assert_eq!(loop_state(&[&primary, &shard]), ProcessorState::Stopped);
+
+        let _primary_loop = primary.spawn("timer processing", std::future::pending::<()>());
+        let _shard_loop = shard.spawn("timer processing", std::future::pending::<()>());
+        assert_eq!(loop_state(&[&primary, &shard]), ProcessorState::Running);
+
+        let _dead = shard.spawn("timer cleanup", async {});
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        assert_eq!(loop_state(&[&primary, &shard]), ProcessorState::Failed);
+
+        shard.stop();
+        assert_eq!(
+            loop_state(&[&primary, &shard]),
+            ProcessorState::ShuttingDown
+        );
     }
 }

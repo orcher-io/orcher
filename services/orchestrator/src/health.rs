@@ -7,6 +7,8 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use orcher_core::engine::loops::Loops;
+use orcher_core::engine::system::DATABASE_CHECK_TIMEOUT;
 use orcher_core::engine::OrchestrationSystem;
 use serde::Serialize;
 use std::sync::Arc;
@@ -19,8 +21,12 @@ pub struct HealthManager {
     orchestration_system: Option<Arc<OrchestrationSystem>>,
     prometheus_registry: Option<prometheus::Registry>,
     /// Every database that holds workflow executions — the main pool and any
-    /// shard pools — so in-flight workflows can be counted where they live.
+    /// shard pools — so in-flight workflows can be counted where they live,
+    /// and readiness can ask each of them to answer.
     metric_pools: Vec<sqlx::PgPool>,
+    /// The engine's background jobs started outside the orchestration system,
+    /// each of which should run until the engine stops.
+    jobs: Arc<Loops>,
 }
 
 struct HealthState {
@@ -35,6 +41,9 @@ struct HealthResponse {
     live: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     orchestration: Option<OrchestrationHealthStatus>,
+    /// Why the engine is not ready, if it is not.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    problems: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -57,6 +66,7 @@ impl HealthManager {
             orchestration_system: None,
             prometheus_registry: None,
             metric_pools: Vec::new(),
+            jobs: Arc::new(Loops::new()),
         }
     }
 
@@ -70,6 +80,7 @@ impl HealthManager {
             orchestration_system: Some(orchestration_system),
             prometheus_registry: None,
             metric_pools: Vec::new(),
+            jobs: Arc::new(Loops::new()),
         }
     }
 
@@ -96,6 +107,76 @@ impl HealthManager {
         self.state.write().await.live = live;
     }
 
+    /// The engine's background jobs: while the engine runs, one ending makes
+    /// it neither ready nor live.
+    pub fn with_jobs(mut self, jobs: Arc<Loops>) -> Self {
+        self.jobs = jobs;
+        self
+    }
+
+    /// Say the engine is stopping: it is no longer ready, and the jobs it
+    /// stops on the way out are not mistaken for jobs that died.
+    pub fn set_stopping(&self) {
+        self.jobs.stop();
+    }
+
+    /// The background loops — the watched jobs and the orchestration
+    /// system's processors — that have ended while the engine runs. Asks
+    /// nothing of the database.
+    fn dead_loops(&self) -> Vec<&'static str> {
+        let mut dead = self.jobs.exited();
+        if let Some(ref system) = self.orchestration_system {
+            dead.extend(system.exited_loops());
+        }
+        dead
+    }
+
+    /// Why the engine should not be sent work, if there is a reason: it has
+    /// not finished starting or is stopping, a database does not answer, or
+    /// a background loop has died.
+    async fn not_ready(&self) -> Vec<String> {
+        let mut problems = Vec::new();
+        if !self.state.read().await.ready || self.jobs.stopping() {
+            problems.push("the engine is starting or stopping".to_string());
+        }
+
+        let mut pings = tokio::task::JoinSet::new();
+        for (index, pool) in self.metric_pools.iter().cloned().enumerate() {
+            pings.spawn(async move {
+                let answered = matches!(
+                    tokio::time::timeout(
+                        DATABASE_CHECK_TIMEOUT,
+                        sqlx::query("SELECT 1").execute(&pool)
+                    )
+                    .await,
+                    Ok(Ok(_))
+                );
+                (index, answered)
+            });
+        }
+        let mut silent: Vec<usize> = Vec::new();
+        while let Some(ping) = pings.join_next().await {
+            match ping {
+                Ok((_, true)) => {}
+                Ok((index, false)) => silent.push(index),
+                Err(_) => silent.push(usize::MAX),
+            }
+        }
+        silent.sort_unstable();
+        for index in silent {
+            problems.push(match index {
+                0 => "the database does not answer".to_string(),
+                usize::MAX => "a database check failed".to_string(),
+                shard => format!("shard database {shard} does not answer"),
+            });
+        }
+
+        for name in self.dead_loops() {
+            problems.push(format!("the {name} loop has stopped"));
+        }
+        problems
+    }
+
     /// Create the health check router
     pub fn router(self) -> Router {
         Router::new()
@@ -114,26 +195,46 @@ impl Default for HealthManager {
     }
 }
 
+/// Ready to be sent work: started and not stopping, every database answers,
+/// and every background loop runs. It used to report a flag set once at
+/// start, so an engine whose database was gone, or whose timer loop had
+/// died, stayed in rotation.
 async fn readiness_handler(State(health): State<HealthManager>) -> impl IntoResponse {
-    let state = health.state.read().await;
-    if state.ready {
-        StatusCode::OK
+    let problems = health.not_ready().await;
+    if problems.is_empty() {
+        (StatusCode::OK, "ready".to_string())
     } else {
-        StatusCode::SERVICE_UNAVAILABLE
+        (StatusCode::SERVICE_UNAVAILABLE, problems.join("\n"))
     }
 }
 
+/// Alive unless a background loop has died while the engine runs: nothing
+/// restarts one but restarting the engine. A database that does not answer
+/// fails readiness, not this, since a restart does not bring it back.
 async fn liveness_handler(State(health): State<HealthManager>) -> impl IntoResponse {
-    let state = health.state.read().await;
-    if state.live {
-        StatusCode::OK
+    let live = health.state.read().await.live;
+    let dead = health.dead_loops();
+    if !live {
+        (StatusCode::SERVICE_UNAVAILABLE, "not live".to_string())
+    } else if dead.is_empty() {
+        (StatusCode::OK, "live".to_string())
     } else {
-        StatusCode::SERVICE_UNAVAILABLE
+        let names: Vec<String> = dead
+            .iter()
+            .map(|name| format!("the {name} loop has stopped"))
+            .collect();
+        (StatusCode::SERVICE_UNAVAILABLE, names.join("\n"))
     }
 }
 
 async fn health_handler(State(health): State<HealthManager>) -> impl IntoResponse {
-    let state = health.state.read().await;
+    // Copied out rather than held: `not_ready` reads the state again, and a
+    // second read queued behind a waiting writer would never be granted.
+    let (ready, live) = {
+        let state = health.state.read().await;
+        (state.ready, state.live)
+    };
+    let problems = health.not_ready().await;
 
     // Get OrchestrationSystem health if available
     let orchestration_health = if let Some(ref system) = health.orchestration_system {
@@ -150,7 +251,7 @@ async fn health_handler(State(health): State<HealthManager>) -> impl IntoRespons
     };
 
     let overall_healthy =
-        state.ready && state.live && orchestration_health.as_ref().is_none_or(|h| h.healthy);
+        live && problems.is_empty() && orchestration_health.as_ref().is_none_or(|h| h.healthy);
 
     let response = HealthResponse {
         status: if overall_healthy {
@@ -158,9 +259,10 @@ async fn health_handler(State(health): State<HealthManager>) -> impl IntoRespons
         } else {
             "unhealthy"
         },
-        ready: state.ready,
-        live: state.live,
+        ready: ready && problems.is_empty(),
+        live: live && health.dead_loops().is_empty(),
         orchestration: orchestration_health,
+        problems,
     };
     Json(response)
 }
@@ -429,6 +531,80 @@ mod tests {
     #[test]
     fn test_default_impl() {
         let _manager = HealthManager::default();
+    }
+
+    async fn probe(manager: &HealthManager, uri: &str) -> (StatusCode, String) {
+        let response = manager
+            .clone()
+            .router()
+            .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let status = response.status();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        (status, String::from_utf8_lossy(&body).into_owned())
+    }
+
+    /// A background job that ends while the engine runs takes it out of
+    /// rotation and fails its liveness, naming the job; both used to stay 200.
+    #[tokio::test]
+    async fn a_dead_job_makes_the_engine_neither_ready_nor_live() {
+        let jobs = Arc::new(Loops::new());
+        let manager = HealthManager::new().with_jobs(jobs.clone());
+        manager.set_ready(true).await;
+        let _running = jobs.spawn("reclaimer", std::future::pending::<()>());
+        assert_eq!(probe(&manager, "/health/ready").await.0, StatusCode::OK);
+        assert_eq!(probe(&manager, "/health/live").await.0, StatusCode::OK);
+
+        let _dead = jobs.spawn("timeout watcher", async { panic!("the watcher broke") });
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let (status, body) = probe(&manager, "/health/ready").await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(body.contains("timeout watcher"), "{body}");
+        let (status, body) = probe(&manager, "/health/live").await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(body.contains("timeout watcher"), "{body}");
+        let (_, body) = probe(&manager, "/health").await;
+        assert!(body.contains("\"status\":\"unhealthy\""), "{body}");
+    }
+
+    /// Jobs ending as the engine stops are not mistaken for jobs that died:
+    /// the engine stops being ready, and stays live while it drains.
+    #[tokio::test]
+    async fn jobs_stopped_on_the_way_out_keep_the_engine_live() {
+        let jobs = Arc::new(Loops::new());
+        let manager = HealthManager::new().with_jobs(jobs.clone());
+        manager.set_ready(true).await;
+        manager.set_stopping();
+        let _stopped = jobs.spawn("reclaimer", async {});
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        assert_eq!(probe(&manager, "/health/live").await.0, StatusCode::OK);
+        assert_eq!(
+            probe(&manager, "/health/ready").await.0,
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+    }
+
+    /// A database that does not answer takes the engine out of rotation, but
+    /// does not fail its liveness: restarting the engine does not bring the
+    /// database back.
+    #[tokio::test]
+    async fn an_unreachable_database_fails_readiness_not_liveness() {
+        let unreachable = sqlx::postgres::PgPoolOptions::new()
+            .acquire_timeout(std::time::Duration::from_millis(500))
+            .connect_lazy("postgresql://orcher@127.0.0.1:1/orcher")
+            .unwrap();
+        let manager = HealthManager::new().with_metric_pools(vec![unreachable]);
+        manager.set_ready(true).await;
+
+        let (status, body) = probe(&manager, "/health/ready").await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(body.contains("database does not answer"), "{body}");
+        assert_eq!(probe(&manager, "/health/live").await.0, StatusCode::OK);
     }
 }
 
