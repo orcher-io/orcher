@@ -225,6 +225,10 @@ pub(crate) fn run_is_over(run: &WorkflowExecution) -> bool {
     )
 }
 
+/// How far a delivery follows a parent reset again and again in one go; the
+/// bound only stops a malformed chain from holding it.
+const MAX_RESET_HOPS: usize = 100;
+
 /// What an attempt to deliver a run's outcome did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Delivery {
@@ -378,23 +382,37 @@ impl ChildOutcomeDelivery {
             return Ok(Delivery::NotFinal);
         };
 
-        let parent = self
-            .executions
-            .find_by_execution_id(&tracking.parent_execution_id)
-            .await?;
-        let Some(parent) = parent else {
-            // Removed by retention: there is no one to tell. Settling the row
-            // stops the sweep from asking again on every pass.
-            warn!(
-                parent_execution_id = %tracking.parent_execution_id,
-                child_execution_id = %run.execution_id,
-                "The finished child's parent no longer exists; nothing to tell"
-            );
-            return Ok(if self.settle(tracking, &outcome).await? {
-                Delivery::Delivered
-            } else {
-                Delivery::AlreadyDelivered
-            });
+        let mut parent_execution_id = tracking.parent_execution_id.clone();
+        let mut hops = 0;
+        let parent = loop {
+            let parent = self
+                .executions
+                .find_by_execution_id(&parent_execution_id)
+                .await?;
+            let Some(parent) = parent else {
+                // Removed by retention: there is no one to tell. Settling the
+                // row stops the sweep from asking again on every pass.
+                warn!(
+                    parent_execution_id = %parent_execution_id,
+                    child_execution_id = %run.execution_id,
+                    "The finished child's parent no longer exists; nothing to tell"
+                );
+                return Ok(if self.settle(tracking, &outcome).await? {
+                    Delivery::Delivered
+                } else {
+                    Delivery::AlreadyDelivered
+                });
+            };
+            // A parent reset after it started the child: the reset run is
+            // the one waiting, and the row moves to it.
+            if hops < MAX_RESET_HOPS {
+                if let Some(successor) = self.follow_reset(tracking, &parent).await? {
+                    parent_execution_id = successor;
+                    hops += 1;
+                    continue;
+                }
+            }
+            break parent;
         };
 
         let (event_type, payload) = outcome.journal_event(tracking, &run.execution_id);
@@ -442,6 +460,61 @@ impl ChildOutcomeDelivery {
             self.wake(&parent).await;
         }
         Ok(Delivery::Delivered)
+    }
+
+    /// The run `tracking`'s child now belongs to, if `parent`, the run the
+    /// row names, was reset after it started the child: the reset run, whose
+    /// history holds the start and which waits on the child. The row, with the
+    /// other rows of children that history started, is moved to it.
+    ///
+    /// A reset moves those rows itself, in its transaction when they are on
+    /// the reset run's database and straight after otherwise; this finishes a
+    /// move that did not happen, so neither a delivery nor the sweep acts for
+    /// a run that was reset on a child that is no longer its own. A child
+    /// started after the reset point is not in the reset run's history and
+    /// stays with `parent`.
+    pub async fn follow_reset(
+        &self,
+        tracking: &ChildWorkflowExecution,
+        parent: &WorkflowExecution,
+    ) -> OrcherResult<Option<String>> {
+        if parent.status != "reset" {
+            return Ok(None);
+        }
+        let Some(reset) = self
+            .journal
+            .latest_of_type(
+                &parent.id.as_uuid().to_string(),
+                &parent.execution_id,
+                "WorkflowExecutionReset",
+            )
+            .await?
+        else {
+            return Ok(None);
+        };
+        let (Some(successor), Some(through_event_id)) = (
+            reset
+                .payload
+                .get("new_execution_id")
+                .and_then(Value::as_str),
+            reset.payload.get("target_event_id").and_then(Value::as_i64),
+        ) else {
+            return Ok(None);
+        };
+        if tracking.parent_initiated_event_id > through_event_id {
+            return Ok(None);
+        }
+        let moved = self
+            .children
+            .move_to_reset_run(&parent.execution_id, successor, through_event_id)
+            .await?;
+        info!(
+            parent_execution_id = %parent.execution_id,
+            reset_execution_id = %successor,
+            moved,
+            "Moved the children the reset run's history started to it"
+        );
+        Ok(Some(successor.to_string()))
     }
 
     /// Close an open row whose child can never report: its run does not exist

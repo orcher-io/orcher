@@ -1825,3 +1825,237 @@ async fn a_record_with_no_run_does_not_take_another_records_run() {
 
     engine.cleanup(&parent).await;
 }
+
+impl Engine {
+    /// The event of `parent_execution_id`'s journal that started its child
+    /// `child_workflow_id`.
+    async fn initiated_at(&self, parent_execution_id: &str, child_workflow_id: &str) -> i64 {
+        sqlx::query_scalar(
+            "SELECT parent_initiated_event_id FROM child_workflow_executions \
+             WHERE parent_execution_id = $1 AND child_workflow_id = $2",
+        )
+        .bind(parent_execution_id)
+        .bind(child_workflow_id)
+        .fetch_one(&self.pool)
+        .await
+        .expect("read the start event")
+    }
+
+    /// Reset `execution_id` to its event `target_event_id`; the reset run.
+    async fn reset_to(&self, execution_id: &str, target_event_id: i64) -> String {
+        self.workflows
+            .reset_workflow(Request::new(ResetWorkflowRequest {
+                execution_id: execution_id.to_string(),
+                namespace: NAMESPACE.to_string(),
+                target_event_id,
+                ..Default::default()
+            }))
+            .await
+            .expect("reset the parent")
+            .into_inner()
+            .new_execution_id
+    }
+
+    /// A parent that started `{name}_kept` and `{name}_done`, then `{name}_late`,
+    /// all to be terminated when it closes, and saw `{name}_done` complete;
+    /// reset to just before it started `{name}_late`. Returns the parent, the
+    /// reset run, and the three children's runs.
+    async fn reset_parent_of_three(
+        &self,
+        name: &str,
+    ) -> (
+        String,
+        String,
+        WorkflowExecution,
+        WorkflowExecution,
+        WorkflowExecution,
+    ) {
+        let (parent_id, parent) = self.claimed_workflow(name).await;
+        self.complete(
+            parent_id,
+            &parent,
+            vec![
+                start_child(&format!("{name}_kept"), ORPHAN_TERMINATE, None),
+                start_child(&format!("{name}_done"), ORPHAN_TERMINATE, None),
+            ],
+        )
+        .await;
+        self.complete(
+            parent_id,
+            &parent,
+            vec![start_child(&format!("{name}_late"), ORPHAN_TERMINATE, None)],
+        )
+        .await;
+        let kept = self.child(&parent, &format!("{name}_kept")).await;
+        let done = self.child(&parent, &format!("{name}_done")).await;
+        let late = self.child(&parent, &format!("{name}_late")).await;
+        self.complete(
+            done.id.as_uuid(),
+            &done.execution_id,
+            vec![complete_workflow(serde_json::json!("done"))],
+        )
+        .await;
+        assert_eq!(
+            self.tracked_state(&parent, &format!("{name}_done")).await,
+            "COMPLETED"
+        );
+
+        let target = self.initiated_at(&parent, &format!("{name}_late")).await - 1;
+        assert!(target >= self.initiated_at(&parent, &format!("{name}_done")).await);
+        let reset = self.reset_to(&parent, target).await;
+        (parent, reset, kept, done, late)
+    }
+
+    /// Move the rows tracking `children` back to parent run `to`.
+    async fn give_back(&self, to: &str, children: &[&WorkflowExecution]) {
+        let runs: Vec<String> = children.iter().map(|c| c.execution_id.clone()).collect();
+        sqlx::query(
+            "UPDATE child_workflow_executions SET parent_execution_id = $1 \
+             WHERE child_execution_id = ANY($2)",
+        )
+        .bind(to)
+        .bind(&runs)
+        .execute(&self.pool)
+        .await
+        .expect("move the rows back");
+    }
+
+    /// The parent and state the row tracking run `child` names.
+    async fn tracking_of(&self, child: &WorkflowExecution) -> (String, String) {
+        sqlx::query_as(
+            "SELECT parent_execution_id, state FROM child_workflow_executions \
+             WHERE child_execution_id = $1",
+        )
+        .bind(&child.execution_id)
+        .fetch_one(&self.pool)
+        .await
+        .expect("read the tracking row")
+    }
+}
+
+/// Resetting a parent hands the reset run the children its history started.
+/// They used to stay with the old run: the sweep terminated a running one as
+/// the old run's orphan, and the outcome of one that had finished after the
+/// reset point was never told to the reset run, which waited for it forever.
+/// A child started after the reset point stays with the old run, and its
+/// close policy ends it.
+#[tokio::test]
+#[ignore] // Requires PostgreSQL
+async fn a_reset_parent_takes_the_children_its_history_started() {
+    let engine = Engine::new().await;
+    let (parent, reset, kept, done, late) =
+        engine.reset_parent_of_three("parent-reset-children").await;
+
+    // Moved with the reset, the finished one opened again for the reset run
+    // to be told.
+    assert_eq!(
+        engine.tracking_of(&kept).await,
+        (reset.clone(), "INITIATED".to_string())
+    );
+    assert_eq!(
+        engine.tracking_of(&done).await,
+        (reset.clone(), "STARTED".to_string())
+    );
+    assert_eq!(engine.tracking_of(&late).await.0, parent);
+
+    engine.wakes(&reset);
+    engine.reconciler.sweep().await.expect("sweep");
+
+    assert_eq!(engine.run(&kept.execution_id).await.status, "running");
+    assert_eq!(engine.run(&late.execution_id).await.status, "terminated");
+    let told = engine.child_outcomes(&reset).await;
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert_eq!(told[0].0, "ChildWorkflowExecutionCompleted");
+    assert_eq!(told[0].1["child_execution_id"], done.execution_id.as_str());
+    assert_eq!(
+        engine.tracking_of(&done).await,
+        (reset.clone(), "COMPLETED".to_string())
+    );
+
+    // The child still running reports to the reset run.
+    engine
+        .complete(
+            kept.id.as_uuid(),
+            &kept.execution_id,
+            vec![complete_workflow(serde_json::json!("kept"))],
+        )
+        .await;
+    let told = engine.child_outcomes(&reset).await;
+    assert_eq!(told.len(), 2, "{told:?}");
+    assert_eq!(told[1].1["child_execution_id"], kept.execution_id.as_str());
+    assert!(!engine
+        .child_outcomes(&parent)
+        .await
+        .iter()
+        .any(|(_, p)| p["child_execution_id"] == kept.execution_id.as_str()));
+
+    engine.cleanup(&reset).await;
+    engine.cleanup(&parent).await;
+}
+
+/// A child whose row still names a reset parent — a move that did not happen,
+/// or a reset from before resets moved children — follows it to the reset
+/// run, from delivery and from the sweep alike.
+#[tokio::test]
+#[ignore] // Requires PostgreSQL
+async fn a_child_left_with_a_reset_parent_follows_it() {
+    let engine = Engine::new().await;
+    let (parent, reset, kept, done, _late) =
+        engine.reset_parent_of_three("parent-reset-left").await;
+    // As the rows were before the reset moved them.
+    engine.give_back(&parent, &[&kept, &done]).await;
+    engine
+        .sql(
+            "UPDATE child_workflow_executions SET state = 'COMPLETED' \
+             WHERE child_execution_id = $1",
+            &done.execution_id,
+        )
+        .await;
+    assert_eq!(engine.tracking_of(&kept).await.0, parent);
+
+    // Delivery: the child completes and the reset run is told.
+    engine.wakes(&reset);
+    engine
+        .complete(
+            kept.id.as_uuid(),
+            &kept.execution_id,
+            vec![complete_workflow(serde_json::json!("kept"))],
+        )
+        .await;
+    assert_eq!(engine.tracking_of(&kept).await.0, reset);
+    let told = engine.child_outcomes(&reset).await;
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert_eq!(told[0].1["child_execution_id"], kept.execution_id.as_str());
+    assert_eq!(engine.wakes(&reset), 1);
+
+    // The move took the finished child too, and the sweep tells the reset run.
+    assert_eq!(engine.tracking_of(&done).await.0, reset);
+    engine.reconciler.sweep().await.expect("sweep");
+    let told = engine.child_outcomes(&reset).await;
+    assert_eq!(told.len(), 2, "{told:?}");
+    assert_eq!(told[1].1["child_execution_id"], done.execution_id.as_str());
+
+    engine.cleanup(&reset).await;
+    engine.cleanup(&parent).await;
+}
+
+/// The sweep, finding a running child whose row still names a reset parent,
+/// moves it to the reset run rather than closing it as the old run's orphan.
+#[tokio::test]
+#[ignore] // Requires PostgreSQL
+async fn the_sweep_does_not_close_a_child_the_reset_run_took() {
+    let engine = Engine::new().await;
+    let (parent, reset, kept, _done, late) =
+        engine.reset_parent_of_three("parent-reset-sweep").await;
+    engine.give_back(&parent, &[&kept]).await;
+
+    engine.reconciler.sweep().await.expect("sweep");
+    engine.reconciler.sweep().await.expect("sweep");
+
+    assert_eq!(engine.tracking_of(&kept).await.0, reset);
+    assert_eq!(engine.run(&kept.execution_id).await.status, "running");
+    assert_eq!(engine.run(&late.execution_id).await.status, "terminated");
+
+    engine.cleanup(&reset).await;
+    engine.cleanup(&parent).await;
+}

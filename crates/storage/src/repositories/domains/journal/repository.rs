@@ -584,6 +584,37 @@ impl JournalRepository {
         Ok(row.map(Into::into))
     }
 
+    /// The latest entry of type `event_type` in the journal of execution
+    /// `execution_id` (journal key `workflow_id`), if it has one.
+    pub async fn latest_of_type(
+        &self,
+        workflow_id: &str,
+        execution_id: &str,
+        event_type: &str,
+    ) -> OrcherResult<Option<JournalEntry>> {
+        let mut conn = self.acquire_for(workflow_id).await?;
+        let row = retry_on_stale_plan!("journal read", conn => {
+            sqlx::query_as::<_, JournalEntryRow>(concat!(
+                r#"
+                SELECT "#,
+                crate::repositories::columns::workflow_execution_journal!(),
+                r#" FROM workflow_execution_journal
+                WHERE workflow_id = $1 AND execution_id = $2 AND event_type = $3
+                ORDER BY event_id DESC
+                LIMIT 1
+                "#
+            ))
+            .bind(workflow_id)
+            .bind(execution_id)
+            .bind(event_type)
+            .fetch_optional(&mut *conn)
+            .await
+        })
+        .map_err(|e| OrcherError::internal(format!("Failed to read the journal: {}", e)))?;
+
+        Ok(row.map(Into::into))
+    }
+
     /// Get a range of journal entries
     ///
     /// Returns entries with event_ids between min_event_id and max_event_id (inclusive).

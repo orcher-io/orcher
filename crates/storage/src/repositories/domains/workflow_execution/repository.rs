@@ -1519,9 +1519,11 @@ impl WorkflowExecutionRepository {
     /// Replace run `old` with `successor`, as a reset does, in one
     /// transaction: `old` ends as `reset`, `successor` gets `old`'s journal up
     /// to and including `target_event_id` and is created with its outbox task
-    /// (taking over the workflow id's hold when `old` had it), and
-    /// `reset_entry` is journaled in `old`. Either all of it is written or
-    /// none of it is: a reset that failed part way used to leave `old` reset
+    /// (taking over the workflow id's hold when `old` had it), `reset_entry`
+    /// is journaled in `old`, and the children that history started move to
+    /// `successor` where their rows are on `old`'s database (see
+    /// [`ChildWorkflowRepository::move_to_reset_run`]; the caller moves any
+    /// kept elsewhere). Either all of it is written or none of it is: a reset that failed part way used to leave `old` reset
     /// with no run to replace it.
     ///
     /// `old` ends only if no run has replaced it yet, read under its row lock:
@@ -1531,6 +1533,8 @@ impl WorkflowExecutionRepository {
     ///
     /// `successor` must route to `old`'s database (see [`Self::id_beside`]),
     /// as one transaction cannot span two.
+    ///
+    /// [`ChildWorkflowRepository::move_to_reset_run`]: crate::repositories::domains::child_workflow::ChildWorkflowRepository::move_to_reset_run
     #[allow(clippy::too_many_arguments)]
     pub async fn reset_run(
         &self,
@@ -1598,6 +1602,18 @@ impl WorkflowExecutionRepository {
         crate::repositories::domains::journal::JournalRepository::append_next_on(
             &mut tx,
             reset_entry,
+        )
+        .await?;
+
+        // The children the copied history started are the new run's. Their
+        // rows are moved here when they are on this database, so no worker
+        // replays the new run, and no outcome is delivered, while they still
+        // name the old one.
+        crate::repositories::domains::child_workflow::ChildWorkflowRepository::move_to_reset_run_on(
+            &mut tx,
+            &old.execution_id,
+            &successor.execution_id,
+            target_event_id,
         )
         .await?;
 
