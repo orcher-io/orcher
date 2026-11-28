@@ -4,6 +4,7 @@ pub mod batching;
 pub mod coordinator;
 pub mod cron;
 pub mod dispatch;
+pub mod loops;
 pub mod metrics;
 pub mod processors;
 pub mod queues;

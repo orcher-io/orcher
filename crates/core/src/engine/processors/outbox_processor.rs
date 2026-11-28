@@ -1,5 +1,6 @@
 //! Outbox queue processor for reliable task dispatch.
 
+use crate::engine::loops::Loops;
 use crate::engine::queues::{OutboxQueue, OutboxTask};
 use orcher_common::error::OrcherResult;
 use orcher_storage::repositories::domains::coordination::CoordinationRepository;
@@ -125,6 +126,9 @@ pub struct OutboxProcessor {
     /// Immediate wake-up signal. Called when new tasks are inserted into the outbox,
     /// so the processor doesn't have to wait for the next poll interval.
     wake: Arc<Notify>,
+
+    /// The processing and cleanup loops, once started.
+    loops: Loops,
 }
 
 /// The workflows whose outbox rows this processor is handling.
@@ -212,6 +216,7 @@ impl OutboxProcessor {
             metrics: Arc::new(Mutex::new(ProcessorMetrics::default())),
             shutdown: Arc::new(Mutex::new(false)),
             wake,
+            loops: Loops::new(),
         }
     }
 
@@ -241,13 +246,13 @@ impl OutboxProcessor {
         // Spawn processing loop
         let processor = self.clone();
         let exec = executor.clone();
-        tokio::spawn(async move {
+        self.loops.spawn("outbox processing", async move {
             processor.run_processing_loop(exec).await;
         });
 
         // Spawn cleanup loop
         let processor = self.clone();
-        tokio::spawn(async move {
+        self.loops.spawn("outbox cleanup", async move {
             processor.run_cleanup_loop().await;
         });
 
@@ -257,6 +262,7 @@ impl OutboxProcessor {
     /// Signal shutdown
     pub async fn shutdown(&self) {
         info!("Shutting down outbox processor");
+        self.loops.stop();
         *self.shutdown.lock().await = true;
         self.wake.notify_waiters();
     }
@@ -265,6 +271,11 @@ impl OutboxProcessor {
     /// Call this after inserting into the outbox queue to eliminate poll-interval latency.
     pub fn notify_new_tasks(&self) {
         self.wake.notify_one();
+    }
+
+    /// The processor's loops, to ask whether they still run.
+    pub fn loops(&self) -> &Loops {
+        &self.loops
     }
 
     /// Get current metrics
@@ -804,6 +815,36 @@ mod tests {
     use super::*;
     use sqlx::PgPool;
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// The processor's loops are watched from the moment it starts, and once
+    /// it is asked to stop their ending is not a failure.
+    #[tokio::test]
+    async fn its_loops_are_watched_once_started() {
+        let pool = Arc::new(
+            sqlx::postgres::PgPoolOptions::new()
+                .acquire_timeout(Duration::from_millis(200))
+                .connect_lazy("postgresql://orcher@127.0.0.1:1/orcher")
+                .unwrap(),
+        );
+        let processor = Arc::new(OutboxProcessor::with_defaults(
+            OutboxQueue::new(Arc::new(
+                orcher_storage::repositories::domains::coordination::OutboxRepository::new(
+                    pool.clone(),
+                ),
+            )),
+            Arc::new(CoordinationRepository::new(pool)),
+        ));
+        assert!(!processor.loops().started());
+        processor
+            .clone()
+            .start(|_| Box::pin(async { Ok(()) }))
+            .await
+            .expect("start");
+        assert!(processor.loops().started());
+        assert!(processor.loops().exited().is_empty());
+        processor.shutdown().await;
+        assert!(processor.loops().stopping());
+    }
 
     #[test]
     fn a_lane_goes_when_its_last_batch_leaves() {

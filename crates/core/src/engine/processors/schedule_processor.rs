@@ -4,6 +4,7 @@
 //! fires workflow executions, and computes the next fire time. Modeled on TimerProcessor.
 
 use crate::engine::cron;
+use crate::engine::loops::Loops;
 use crate::engine::queues::ScheduleQueue;
 use orcher_common::error::OrcherResult;
 use orcher_common::types::time::Timestamptz;
@@ -78,6 +79,8 @@ pub struct ScheduleProcessor {
     config: ScheduleProcessorConfig,
     metrics: Arc<Mutex<ScheduleMetrics>>,
     shutdown: Arc<Mutex<bool>>,
+    /// The processing and cleanup loops, once started.
+    loops: Loops,
 }
 
 impl ScheduleProcessor {
@@ -88,6 +91,7 @@ impl ScheduleProcessor {
             config,
             metrics: Arc::new(Mutex::new(ScheduleMetrics::default())),
             shutdown: Arc::new(Mutex::new(false)),
+            loops: Loops::new(),
         }
     }
 
@@ -104,7 +108,13 @@ impl ScheduleProcessor {
     /// Signal graceful shutdown.
     pub async fn shutdown(&self) {
         info!("Shutting down schedule processor");
+        self.loops.stop();
         *self.shutdown.lock().await = true;
+    }
+
+    /// The processor's loops, to ask whether they still run.
+    pub fn loops(&self) -> &Loops {
+        &self.loops
     }
 
     /// Start the processor with a custom executor function.
@@ -132,12 +142,18 @@ impl ScheduleProcessor {
 
         // Spawn cleanup loop
         let cleanup_self = self.clone();
-        tokio::spawn(async move {
+        self.loops.spawn("schedule cleanup", async move {
             cleanup_self.run_cleanup_loop().await;
         });
 
-        // Run main processing loop
-        self.run_processing_loop(executor).await;
+        // Run main processing loop, watched like the cleanup loop.
+        let processing = self.clone();
+        let _ = self
+            .loops
+            .spawn("schedule processing", async move {
+                processing.run_processing_loop(executor).await;
+            })
+            .await;
 
         info!("Schedule processor stopped");
         Ok(())
@@ -476,6 +492,34 @@ impl ScheduleProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The processor's loops are watched from the moment it starts, and once
+    /// it is asked to stop their ending is not a failure.
+    #[tokio::test]
+    async fn its_loops_are_watched_once_started() {
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .acquire_timeout(Duration::from_millis(200))
+            .connect_lazy("postgresql://orcher@127.0.0.1:1/orcher")
+            .unwrap();
+        let processor = Arc::new(ScheduleProcessor::with_defaults(ScheduleQueue::new(
+            Arc::new(
+                orcher_storage::repositories::domains::schedule::ScheduleRepository::new(pool),
+            ),
+        )));
+        assert!(!processor.loops().started());
+        let running = processor.clone();
+        let started = tokio::spawn(async move {
+            running
+                .start(|_| Box::pin(async { Ok(uuid::Uuid::new_v4()) }))
+                .await
+        });
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(processor.loops().started());
+        assert!(processor.loops().exited().is_empty());
+        processor.shutdown().await;
+        assert!(processor.loops().stopping());
+        started.abort();
+    }
 
     #[test]
     fn test_default_config() {

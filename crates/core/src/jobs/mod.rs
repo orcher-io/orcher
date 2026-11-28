@@ -20,7 +20,7 @@ use tracing::{error, info};
 pub mod data_retention;
 pub mod metrics_aggregation;
 
-/// Start all background jobs
+/// Start all background jobs, each named
 ///
 /// Spawns a tokio task for each enabled job. Each job runs on its own
 /// interval and can be shut down gracefully via the shutdown signal.
@@ -33,12 +33,12 @@ pub mod metrics_aggregation;
 ///
 /// # Returns
 ///
-/// Vector of join handles for all spawned jobs
+/// Each spawned job's name and join handle
 pub async fn start_background_jobs(
     pool: Arc<PgPool>,
     config: BackgroundJobsConfig,
     shutdown: watch::Receiver<bool>,
-) -> Vec<JoinHandle<()>> {
+) -> Vec<(&'static str, JoinHandle<()>)> {
     info!("Starting background jobs system");
 
     let mut handles = Vec::new();
@@ -55,24 +55,27 @@ pub async fn start_background_jobs(
         let interval = Duration::from_secs(config.metrics_interval_secs);
         let mut shutdown_rx = shutdown.clone();
 
-        handles.push(tokio::spawn(async move {
-            let mut ticker = tokio::time::interval(interval);
+        handles.push((
+            "metrics aggregation",
+            tokio::spawn(async move {
+                let mut ticker = tokio::time::interval(interval);
 
-            loop {
-                tokio::select! {
-                    _ = ticker.tick() => {
-                        if let Err(e) = metrics_aggregation::run(&pool).await {
-                            error!("Metrics aggregation failed: {}", e);
-                            // Continue running despite errors
+                loop {
+                    tokio::select! {
+                        _ = ticker.tick() => {
+                            if let Err(e) = metrics_aggregation::run(&pool).await {
+                                error!("Metrics aggregation failed: {}", e);
+                                // Continue running despite errors
+                            }
+                        }
+                        _ = shutdown_rx.changed() => {
+                            info!("Metrics aggregation job stopping gracefully");
+                            break;
                         }
                     }
-                    _ = shutdown_rx.changed() => {
-                        info!("Metrics aggregation job stopping gracefully");
-                        break;
-                    }
                 }
-            }
-        }));
+            }),
+        ));
     } else {
         info!("Metrics aggregation job disabled");
     }
@@ -90,24 +93,27 @@ pub async fn start_background_jobs(
         let retention_config = config.retention_days.clone();
         let mut shutdown_rx = shutdown.clone();
 
-        handles.push(tokio::spawn(async move {
-            let mut ticker = tokio::time::interval(interval);
+        handles.push((
+            "data retention",
+            tokio::spawn(async move {
+                let mut ticker = tokio::time::interval(interval);
 
-            loop {
-                tokio::select! {
-                    _ = ticker.tick() => {
-                        if let Err(e) = data_retention::run(&pool, &retention_config).await {
-                            error!("Data retention failed: {}", e);
-                            // Continue running despite errors
+                loop {
+                    tokio::select! {
+                        _ = ticker.tick() => {
+                            if let Err(e) = data_retention::run(&pool, &retention_config).await {
+                                error!("Data retention failed: {}", e);
+                                // Continue running despite errors
+                            }
+                        }
+                        _ = shutdown_rx.changed() => {
+                            info!("Data retention job stopping gracefully");
+                            break;
                         }
                     }
-                    _ = shutdown_rx.changed() => {
-                        info!("Data retention job stopping gracefully");
-                        break;
-                    }
                 }
-            }
-        }));
+            }),
+        ));
     } else {
         info!("Data retention job disabled");
     }

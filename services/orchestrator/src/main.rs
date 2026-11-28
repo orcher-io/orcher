@@ -322,6 +322,10 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
 
     // Setup shutdown coordinator
     let shutdown = Arc::new(shutdown::ShutdownCoordinator::new());
+    // The background loops the engine runs until it stops. Health reads them:
+    // one that ends while the engine runs makes it neither ready nor live,
+    // since nothing but a restart starts it again.
+    let engine_loops = Arc::new(orcher_core::engine::loops::Loops::new());
 
     // Initialize PostgreSQL connection pool
     // Redacted: this line used to log the connection string verbatim,
@@ -625,7 +629,7 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
         // A sweep that has not finished well within a heartbeat interval is
         // abandoned, so a slow database cannot pile sweeps up behind it.
         let sweep_bound = Duration::from_millis((heartbeat_secs * 1000 / 2).max(500));
-        let membership_loop = tokio::spawn(async move {
+        let membership_loop = engine_loops.spawn("cluster membership", async move {
             let mut tick = tokio::time::interval(Duration::from_secs(heartbeat_secs));
             let mut draining = false;
             loop {
@@ -835,6 +839,9 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
 
     let job_handles =
         start_background_jobs(Arc::new(pool.clone()), job_config.clone(), jobs_shutdown_rx).await;
+    for (name, handle) in &job_handles {
+        engine_loops.watch(name, handle.abort_handle());
+    }
 
     info!(
         jobs_count = job_handles.len(),
@@ -1007,6 +1014,7 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
             "Starting reclaimer background task"
         );
         let handle = polling_manager.start().await;
+        engine_loops.watch("reclaimer", handle.abort_handle());
         info!("Reclaimer background task started successfully");
         Some(handle)
     } else {
@@ -1051,6 +1059,7 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
             config.polling.claim_timeout_secs,
         ));
         let handle = timeout_watcher.start();
+        engine_loops.watch("timeout watcher", handle.abort_handle());
 
         info!(
             poll_interval_secs = config.timeout_watcher.poll_interval_secs,
@@ -1103,6 +1112,7 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
         );
 
         let handle = workflow_retry_scheduler.clone().start();
+        engine_loops.watch("workflow retry scheduler", handle.abort_handle());
 
         info!(
             poll_interval_secs = config.workflow_retry.poll_interval_secs,
@@ -1407,7 +1417,11 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
         workflow_coordinator
             .set_outbox_retention_days(config.background_jobs.retention_days.outbox_queue);
         let dispatcher = TaskRetryDispatcher::new(retry_scheduler, workflow_coordinator.clone());
-        let _task_retry_dispatcher_handle = dispatcher.start();
+        let task_retry_dispatcher_handle = dispatcher.start();
+        engine_loops.watch(
+            "task retry dispatcher",
+            task_retry_dispatcher_handle.abort_handle(),
+        );
         info!(
             component = "task_retry_dispatcher",
             "TaskRetryDispatcher started - scheduled task retries are delivered once their backoff elapses"
@@ -1490,6 +1504,7 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
             .with_cancellation(workflow_execution_service.clone()),
         );
         let handle = reconciler.clone().start();
+        engine_loops.watch("child reconciler", handle.abort_handle());
         info!(
             component = "child_reconciler",
             poll_interval_secs = config.child_reconciler.poll_interval_secs,
@@ -1519,7 +1534,7 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
         let every =
             std::time::Duration::from_secs((config.polling.claim_timeout_secs / 4).clamp(5, 30));
         let mut stop = shutdown.subscribe();
-        tokio::spawn(async move {
+        engine_loops.spawn("activation permit release", async move {
             let mut ticker = tokio::time::interval(every);
             loop {
                 tokio::select! {
@@ -1563,9 +1578,12 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
             release = release.with_tasks(timeout_watcher.clone());
         }
         let mut stop = shutdown.subscribe();
-        tokio::spawn(Arc::new(release).run(async move {
-            let _ = stop.recv().await;
-        }));
+        engine_loops.spawn(
+            "worker claim release",
+            Arc::new(release).run(async move {
+                let _ = stop.recv().await;
+            }),
+        );
         if config.worker_liveness.enabled {
             info!(
                 refresh_interval_secs = settings.refresh.as_secs(),
@@ -1591,9 +1609,12 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
             workflow_execution_service.delayed_start_wake(),
         );
         let mut stop = shutdown.subscribe();
-        tokio::spawn(Arc::new(delayed_starts).run(async move {
-            let _ = stop.recv().await;
-        }));
+        engine_loops.spawn(
+            "delayed starts",
+            Arc::new(delayed_starts).run(async move {
+                let _ = stop.recv().await;
+            }),
+        );
         info!("Delayed starts are handed out as they come due");
     }
 
@@ -1870,7 +1891,7 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
             ),
         );
         let bp = batch_processor.clone();
-        tokio::spawn(async move {
+        engine_loops.spawn("batch operations", async move {
             if let Err(e) = bp.start().await {
                 tracing::error!("BatchProcessor failed: {}", e);
             }
@@ -1941,7 +1962,7 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
         // pods as idle and healthy. Age the rows out on the same tick.
         let worker_rows = worker_repo.clone();
         let mut cleanup_shutdown = shutdown.subscribe();
-        tokio::spawn(async move {
+        engine_loops.spawn("stale worker cleanup", async move {
             let mut interval = tokio::time::interval(Duration::from_secs(60));
             interval.tick().await; // skip immediate tick
             loop {
@@ -1986,7 +2007,7 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
     {
         let registry = actor_registry.clone();
         let mut cleanup_shutdown = shutdown.subscribe();
-        tokio::spawn(async move {
+        engine_loops.spawn("stale actor service cleanup", async move {
             let mut interval = tokio::time::interval(Duration::from_secs(60));
             interval.tick().await; // skip immediate tick
             loop {
@@ -2028,7 +2049,8 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
                 std::iter::once(pool.clone())
                     .chain(shard_pools.iter().map(|shard| (**shard).clone()))
                     .collect(),
-            ),
+            )
+            .with_jobs(engine_loops.clone()),
     );
     info!("Health manager initialized with OrchestrationSystem integration");
 
@@ -2222,8 +2244,10 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
 
     // Spawn signal handler
     let shutdown_clone = shutdown.clone();
+    let stopping_health = health.clone();
     tokio::spawn(async move {
         shutdown::wait_for_signal().await;
+        stopping_health.set_stopping();
         shutdown_clone.trigger();
     });
 
@@ -2239,6 +2263,7 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
     };
     if let Some(ref error) = server_failure {
         tracing::error!(error = %format!("{error:#}"), "A server stopped unexpectedly; shutting down");
+        health.set_stopping();
         shutdown.trigger();
     }
 
@@ -2253,7 +2278,7 @@ async fn run_service(config: config::OrchestratorConfig) -> Result<()> {
 
     // Stop background jobs gracefully
     info!(jobs_count = job_handles.len(), "Stopping background jobs");
-    for handle in job_handles {
+    for (_, handle) in job_handles {
         if let Err(e) = tokio::time::timeout(std::time::Duration::from_secs(10), handle).await {
             warn!("Background job did not complete within timeout: {}", e);
         }
