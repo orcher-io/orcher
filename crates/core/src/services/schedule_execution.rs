@@ -8,7 +8,7 @@ use crate::workflows::execution::{RunStart, RunTimeouts, WorkflowExecutionServic
 use orcher_common::OrcherResult;
 use orcher_storage::schema::types::Schedule;
 use std::sync::Arc;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 /// Service responsible for executing scheduled workflow starts.
 ///
@@ -33,9 +33,15 @@ impl ScheduleExecutionService {
         }
     }
 
-    /// Execute a schedule by starting the configured workflow.
-    /// Returns the workflow execution ID for linking back to schedule_executions.
-    pub async fn execute_schedule(&self, schedule: Schedule) -> OrcherResult<uuid::Uuid> {
+    /// Execute a schedule by starting the configured workflow, after asking
+    /// the runs it `replacing` (execution ids, from the `replace` overlap
+    /// policy) to cancel. Returns the started run's row id
+    /// (`workflow_executions.id`), which the fire is recorded against.
+    pub async fn execute_schedule(
+        &self,
+        schedule: Schedule,
+        replacing: Vec<String>,
+    ) -> OrcherResult<uuid::Uuid> {
         debug!(
             schedule_id = %schedule.id,
             schedule_name = %schedule.name,
@@ -64,6 +70,24 @@ impl ScheduleExecutionService {
         let task_queue = run.task_queue.clone();
         let namespace = run.namespace.clone();
 
+        // The runs this fire replaces are asked to cancel first, as an API
+        // cancellation would ask, so each can clean up. One that cannot be
+        // asked does not hold up the new run.
+        for execution_id in &replacing {
+            if let Err(e) = self
+                .workflow_execution_service
+                .cancel_execution(execution_id, "replaced by the schedule's next run", None)
+                .await
+            {
+                warn!(
+                    schedule_id = %schedule.id,
+                    execution_id = %execution_id,
+                    error = %e,
+                    "Could not cancel the run a scheduled run replaces"
+                );
+            }
+        }
+
         // Start workflow execution
         let execution = self
             .workflow_execution_service
@@ -83,23 +107,15 @@ impl ScheduleExecutionService {
             .notify_work_available(&task_queue, &namespace)
             .await;
 
-        let execution_id_str = execution.execution_id;
-        let execution_id = uuid::Uuid::parse_str(&execution_id_str).map_err(|e| {
-            orcher_common::error::OrcherError::Internal {
-                message: format!("Invalid execution_id UUID '{}': {}", execution_id_str, e),
-                source: None,
-            }
-        })?;
-
         info!(
             schedule_id = %schedule.id,
             schedule_name = %schedule.name,
-            execution_id = %execution_id,
+            execution_id = %execution.execution_id,
             workflow_type = %workflow_type,
             "Scheduled workflow started successfully"
         );
 
-        Ok(execution_id)
+        Ok(execution.id.as_uuid())
     }
 }
 

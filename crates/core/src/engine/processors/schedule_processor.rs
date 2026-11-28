@@ -34,6 +34,9 @@ pub struct ScheduleProcessorConfig {
     pub stuck_threshold_secs: i64,
     /// How often to run the cleanup loop.
     pub cleanup_interval: Duration,
+    /// How soon a tick held by the `queue` policy is looked at again, to fire
+    /// once the run it waits for has ended.
+    pub queue_recheck: Duration,
 }
 
 impl Default for ScheduleProcessorConfig {
@@ -44,6 +47,7 @@ impl Default for ScheduleProcessorConfig {
             min_sleep_duration: Duration::from_millis(100),
             stuck_threshold_secs: 300,
             cleanup_interval: Duration::from_secs(60),
+            queue_recheck: Duration::from_secs(5),
         }
     }
 }
@@ -57,8 +61,10 @@ impl Default for ScheduleProcessorConfig {
 pub struct ScheduleMetrics {
     /// Schedules successfully fired (workflow started).
     pub schedules_fired: u64,
-    /// Schedules skipped due to overlap policy.
+    /// Ticks the overlap policy skipped.
     pub schedules_skipped: u64,
+    /// Ticks the `queue` policy held for a run still open.
+    pub schedules_held: u64,
     /// Schedules that failed to fire.
     pub schedules_failed: u64,
     /// Stuck schedules recovered by cleanup loop.
@@ -109,15 +115,20 @@ impl ScheduleProcessor {
 
     /// Start the processor with a custom executor function.
     ///
-    /// The executor receives a `Schedule` and should start the corresponding
-    /// workflow execution. It returns `Ok(())` on success or an error.
+    /// The executor receives a `Schedule` and the runs its fire replaces (the
+    /// open runs of a `replace` schedule, by execution id, to be cancelled),
+    /// starts the schedule's workflow, and returns the started run's row id
+    /// (`workflow_executions.id`).
     ///
     /// This method spawns two background loops:
     /// - Processing loop: claims and fires due schedules
     /// - Cleanup loop: recovers stuck schedules
     pub async fn start<F>(self: Arc<Self>, executor: F) -> OrcherResult<()>
     where
-        F: Fn(Schedule) -> Pin<Box<dyn Future<Output = OrcherResult<uuid::Uuid>> + Send>>
+        F: Fn(
+                Schedule,
+                Vec<String>,
+            ) -> Pin<Box<dyn Future<Output = OrcherResult<uuid::Uuid>> + Send>>
             + Send
             + Sync
             + 'static,
@@ -146,7 +157,10 @@ impl ScheduleProcessor {
     /// Main processing loop: claim → check overlap → execute → update → sleep.
     async fn run_processing_loop<F>(self: Arc<Self>, executor: Arc<F>)
     where
-        F: Fn(Schedule) -> Pin<Box<dyn Future<Output = OrcherResult<uuid::Uuid>> + Send>>
+        F: Fn(
+                Schedule,
+                Vec<String>,
+            ) -> Pin<Box<dyn Future<Output = OrcherResult<uuid::Uuid>> + Send>>
             + Send
             + Sync
             + 'static,
@@ -221,47 +235,72 @@ impl ScheduleProcessor {
         }
     }
 
-    /// Process a single claimed schedule.
-    async fn process_schedule<F>(&self, schedule: &Schedule, executor: Arc<F>) -> OrcherResult<()>
+    /// Process one schedule this processor has claimed: decide its overlap
+    /// policy against the runs it started that are still open, then fire it,
+    /// skip the tick, or hold it.
+    pub async fn process_schedule<F>(
+        &self,
+        schedule: &Schedule,
+        executor: Arc<F>,
+    ) -> OrcherResult<()>
     where
-        F: Fn(Schedule) -> Pin<Box<dyn Future<Output = OrcherResult<uuid::Uuid>> + Send>>
+        F: Fn(
+                Schedule,
+                Vec<String>,
+            ) -> Pin<Box<dyn Future<Output = OrcherResult<uuid::Uuid>> + Send>>
             + Send
             + Sync
             + 'static,
     {
-        // Check overlap policy
-        if !self.should_fire(schedule).await? {
-            debug!(
-                schedule_id = %schedule.id,
-                policy = ?schedule.overlap_policy,
-                "Skipping schedule due to overlap policy"
-            );
-
-            // Compute next fire time and reset to active
-            let next = self.compute_next_fire_time(schedule)?;
-            self.schedule_queue.mark_fired(schedule.id, next).await?;
-
-            let mut metrics = self.metrics.lock().await;
-            metrics.schedules_skipped += 1;
-
-            return Ok(());
-        }
+        let replacing = match self.decide(schedule).await? {
+            Overlap::Fire { replacing } => replacing,
+            Overlap::Skip => {
+                debug!(
+                    schedule_id = %schedule.id,
+                    policy = ?schedule.overlap_policy,
+                    "Skipping a tick: the schedule's previous run is still open"
+                );
+                let next = self.compute_next_fire_time(schedule)?;
+                self.schedule_queue
+                    .release_unfired(schedule.id, next)
+                    .await?;
+                self.metrics.lock().await.schedules_skipped += 1;
+                return Ok(());
+            }
+            Overlap::Hold => {
+                debug!(
+                    schedule_id = %schedule.id,
+                    "Holding a tick until the schedule's previous run ends"
+                );
+                let recheck = jiff::SignedDuration::try_from(self.config.queue_recheck)
+                    .unwrap_or(jiff::SignedDuration::from_secs(5));
+                self.schedule_queue
+                    .release_unfired(schedule.id, Some(Timestamptz::now() + recheck))
+                    .await?;
+                self.metrics.lock().await.schedules_held += 1;
+                return Ok(());
+            }
+        };
 
         // Fire the schedule (call executor to start workflow)
-        let fire_result = executor(schedule.clone()).await;
+        let fire_result = executor(schedule.clone(), replacing).await;
 
-        // Record execution with the workflow execution ID (if successful)
+        // Record the fire, and the run it started if it started one.
         let scheduled_at = schedule.next_run_at.unwrap_or_else(Timestamptz::now);
-        let workflow_execution_id = fire_result.as_ref().ok().copied();
-        let _ = self
+        let run = fire_result.as_ref().ok().copied();
+        // The record is what the overlap policy reads the run back from, so a
+        // fire that could not be recorded is said so rather than dropped.
+        if let Err(e) = self
             .schedule_queue
-            .insert_execution(
-                schedule.id,
-                schedule.run_count + 1,
-                scheduled_at,
-                workflow_execution_id,
-            )
-            .await;
+            .insert_execution(schedule.id, schedule.run_count + 1, scheduled_at, run)
+            .await
+        {
+            warn!(
+                schedule_id = %schedule.id,
+                error = %e,
+                "A schedule fired, but the fire could not be recorded; its overlap policy will not see the run"
+            );
+        }
 
         // Compute next fire time
         let next = self.compute_next_fire_time(schedule)?;
@@ -310,32 +349,16 @@ impl ScheduleProcessor {
         }
     }
 
-    /// Check overlap policy — should this schedule fire given active instances?
-    async fn should_fire(&self, schedule: &Schedule) -> OrcherResult<bool> {
-        match schedule.overlap_policy {
-            OverlapPolicy::Parallel => Ok(true),
-            OverlapPolicy::Skip => {
-                let active = self
-                    .schedule_queue
-                    .count_active_instances(schedule.id)
-                    .await?;
-                Ok(active == 0)
-            }
-            OverlapPolicy::Replace => {
-                // For v1, treat Replace as "allow" — proper cancellation of
-                // running workflows requires integration with WorkflowService.
-                Ok(true)
-            }
-            OverlapPolicy::Queue => {
-                // For v1, treat Queue as Skip — buffering requires additional
-                // state management.
-                let active = self
-                    .schedule_queue
-                    .count_active_instances(schedule.id)
-                    .await?;
-                Ok(active == 0)
-            }
-        }
+    /// What the schedule's overlap policy makes of a tick, given the runs the
+    /// schedule started that are still open. Read for every policy, so each
+    /// fire is settled once its runs end, whatever the policy.
+    async fn decide(&self, schedule: &Schedule) -> OrcherResult<Overlap> {
+        let open = self.schedule_queue.open_runs(schedule.id).await?;
+        Ok(overlap(
+            schedule.overlap_policy,
+            schedule.max_instances,
+            open,
+        ))
     }
 
     /// Compute the next fire time for a schedule.
@@ -473,9 +496,80 @@ impl ScheduleProcessor {
     }
 }
 
+/// What a schedule's overlap policy makes of a tick.
+#[derive(Debug, PartialEq, Eq)]
+enum Overlap {
+    /// Start a run, cancelling these first (execution ids).
+    Fire { replacing: Vec<String> },
+    /// Drop the tick; the schedule is next due at its next cron time.
+    Skip,
+    /// Keep the tick until the open run ends. Ticks that come due meanwhile
+    /// are not stacked behind it: one run waits, then the cron carries on.
+    Hold,
+}
+
+/// The overlap policies, as the schedules API documents them, given the
+/// schedule's runs still `open`.
+fn overlap(policy: OverlapPolicy, max_instances: i32, open: Vec<String>) -> Overlap {
+    match policy {
+        OverlapPolicy::Skip if !open.is_empty() => Overlap::Skip,
+        OverlapPolicy::Queue if !open.is_empty() => Overlap::Hold,
+        // Up to `max_instances` at once, which the schema keeps at one or more.
+        OverlapPolicy::Parallel if open.len() >= max_instances.max(1) as usize => Overlap::Skip,
+        OverlapPolicy::Replace => Overlap::Fire { replacing: open },
+        _ => Overlap::Fire {
+            replacing: Vec::new(),
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn runs(n: usize) -> Vec<String> {
+        (0..n).map(|i| format!("run-{i}")).collect()
+    }
+
+    #[test]
+    fn every_policy_fires_when_nothing_is_open() {
+        for policy in [
+            OverlapPolicy::Skip,
+            OverlapPolicy::Queue,
+            OverlapPolicy::Replace,
+            OverlapPolicy::Parallel,
+        ] {
+            assert_eq!(
+                overlap(policy, 1, runs(0)),
+                Overlap::Fire { replacing: vec![] },
+                "{policy:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_open_run_is_skipped_held_replaced_or_joined() {
+        assert_eq!(overlap(OverlapPolicy::Skip, 1, runs(1)), Overlap::Skip);
+        assert_eq!(overlap(OverlapPolicy::Queue, 1, runs(1)), Overlap::Hold);
+        assert_eq!(
+            overlap(OverlapPolicy::Replace, 1, runs(2)),
+            Overlap::Fire { replacing: runs(2) }
+        );
+        assert_eq!(
+            overlap(OverlapPolicy::Parallel, 2, runs(1)),
+            Overlap::Fire { replacing: vec![] }
+        );
+    }
+
+    #[test]
+    fn parallel_runs_up_to_max_instances() {
+        assert_eq!(overlap(OverlapPolicy::Parallel, 2, runs(2)), Overlap::Skip);
+        assert_eq!(overlap(OverlapPolicy::Parallel, 1, runs(1)), Overlap::Skip);
+        assert_eq!(
+            overlap(OverlapPolicy::Parallel, 50, runs(49)),
+            Overlap::Fire { replacing: vec![] }
+        );
+    }
 
     #[test]
     fn test_default_config() {
@@ -490,6 +584,7 @@ mod tests {
         let metrics = ScheduleMetrics::default();
         assert_eq!(metrics.schedules_fired, 0);
         assert_eq!(metrics.schedules_skipped, 0);
+        assert_eq!(metrics.schedules_held, 0);
         assert_eq!(metrics.schedules_failed, 0);
         assert_eq!(metrics.stuck_recovered, 0);
     }
