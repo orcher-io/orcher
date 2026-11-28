@@ -4,6 +4,18 @@ What changes for an existing deployment or client when you move to a release,
 beyond the bug fixes listed in [CHANGELOG.md](CHANGELOG.md). Read the section
 for every release between the one you run and the one you are moving to.
 
+## Unreleased
+
+- A timer whose fire fails is retried after a backoff, 1s doubling to at
+  most 5 minutes, until it fires, rather than at once and three times at
+  most (#45). `timer_queue.max_retries` no longer limits a timer, and the
+  timer processor no longer moves timers to the dead letter queue. Migration
+  V090 drops the check that held `attempt_count` to `max_retries + 1`. It
+  holds an exclusive lock on `timer_queue` only for a moment, without reading
+  the table, and validates its new check without blocking reads or writes.
+  A timer that ended `failed` before the upgrade stays failed: to wake its
+  workflow, set it back to `pending` with `fire_at = NOW()`.
+
 ## 0.7.4
 
 - Task polls carry `client_workflow_id`, as workflow polls do since 0.7.3,

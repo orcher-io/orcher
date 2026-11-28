@@ -149,6 +149,7 @@ GUARDS=(
   "Outbox — the outbox is analyzed after a thousand changes however large it is, so its claims are planned for a burst within one autovacuum round|--test outbox_analysis -- --ignored --test-threads=1"
   "Retention — a run's journal is deleted only once the run has ended before the period, as a whole; a running, waiting or retrying run keeps its journal and a retrying run its row|--test retention_keeps_open_journals -- --ignored --test-threads=1"
   "Timers — a cancelled timer's row is cancelled and a fire after a journaled cancel records nothing; a timer not cancelled is journaled as fired once|--test cancelled_timer -- --ignored --test-threads=1"
+  "Timers — a failed fire is retried after a growing, capped backoff until it fires, never by a fire that lost its claim; a timer whose workflow is gone is done|--test timer_retry -- --ignored --test-threads=1"
   "Sharding — a node claims only outbox rows on the shards it owns, rows from before shards stay claimable, the sweep picks up a row no one owns, no scope claims everything|--test shard_filtered_claims -- --ignored --test-threads=1"
   "Cancellation — a cancel never overwrites a run that already ended, and still cancels a live one|--test cancel_does_not_overwrite_terminal -- --ignored --test-threads=1"
   "Cancellation — a workflow ending itself as cancelled keeps an ending the run already has, and a superseded owner cannot cancel|--test workflow_cancellation_keeps_an_ending -- --ignored --test-threads=1"

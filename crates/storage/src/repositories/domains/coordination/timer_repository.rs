@@ -340,79 +340,62 @@ impl TimerRepository {
         Ok(())
     }
 
-    /// Mark a timer task as failed and schedule retry or move to failed status
-    pub async fn fail(&self, task_id: Uuid, error_message: String) -> OrcherResult<()> {
-        // First, get the task to check retry logic
-        let task = self.find_by_id(task_id).await?;
-
-        let task = match task {
-            Some(t) => t,
-            None => {
-                warn!(task_id = %task_id, "Timer task not found for failure");
-                return Ok(());
+    /// Put a timer whose fire failed back in the queue, due again after a
+    /// backoff: 1s doubling with each attempt to at most 5 minutes, each
+    /// spread by ±20% so timers that failed together do not retry together.
+    ///
+    /// A timer is retried until it fires. Its workflow is parked on it, so a
+    /// timer given up on is a workflow that never wakes; and what makes a fire
+    /// fail is the engine's own storage, not anything the workflow did. It
+    /// used to be put back due at once, so a fault lasting a moment spent all
+    /// its attempts in milliseconds and the workflow waited forever.
+    ///
+    /// Only a timer this attempt still holds is put back: one the stuck-timer
+    /// sweep has released, and another processor may since have claimed, is
+    /// left to that processor. Returns whether it was put back.
+    pub async fn fail(&self, task_id: Uuid, error_message: String) -> OrcherResult<bool> {
+        let retry_at = sqlx::query_scalar::<_, Timestamptz>(
+            r#"
+            UPDATE timer_queue
+            SET status = 'pending',
+                processing_started_at = NULL,
+                last_error = $2,
+                fire_at = NOW()
+                    + LEAST(1000 * power(2, LEAST(GREATEST(attempt_count, 1) - 1, 20)), 300000)
+                      * (0.8 + 0.4 * random())
+                      * INTERVAL '1 millisecond'
+            WHERE task_id = $1
+              AND status = 'processing'
+            RETURNING fire_at
+            "#,
+        )
+        .bind(task_id)
+        .bind(&error_message)
+        .fetch_optional(self.pool.as_ref())
+        .await
+        .map_err(|e| {
+            error!("Failed to schedule retry for timer task: {}", e);
+            orcher_common::error::OrcherError::Internal {
+                message: format!("Failed to schedule retry: {}", e),
+                source: None,
             }
-        };
+        })?;
 
-        // Check if we can retry
-        if task.can_retry() {
-            // Reschedule for immediate retry (timers don't use exponential backoff)
-            sqlx::query(
-                r#"
-                UPDATE timer_queue
-                SET status = 'pending',
-                    processing_started_at = NULL,
-                    last_error = $2
-                WHERE task_id = $1
-                "#,
-            )
-            .bind(task_id)
-            .bind(&error_message)
-            .execute(self.pool.as_ref())
-            .await
-            .map_err(|e| {
-                error!("Failed to schedule retry for timer task: {}", e);
-                orcher_common::error::OrcherError::Internal {
-                    message: format!("Failed to schedule retry: {}", e),
-                    source: None,
-                }
-            })?;
-
-            debug!(
-                task_id = %task_id,
-                attempt = task.attempt_count,
-                "Scheduled timer task for retry"
-            );
-        } else {
-            // No more retries, mark as failed
-            sqlx::query(
-                r#"
-                UPDATE timer_queue
-                SET status = 'failed',
-                    completed_at = NOW(),
-                    last_error = $2
-                WHERE task_id = $1
-                "#,
-            )
-            .bind(task_id)
-            .bind(&error_message)
-            .execute(self.pool.as_ref())
-            .await
-            .map_err(|e| {
-                error!("Failed to mark timer task as failed: {}", e);
-                orcher_common::error::OrcherError::Internal {
-                    message: format!("Failed to mark timer task as failed: {}", e),
-                    source: None,
-                }
-            })?;
-
-            warn!(
-                task_id = %task_id,
-                error = %error_message,
-                "Timer task failed after all retries"
-            );
+        match retry_at {
+            Some(retry_at) => {
+                warn!(
+                    task_id = %task_id,
+                    error = %error_message,
+                    retry_at = %retry_at,
+                    "Timer fire failed; retrying after a backoff"
+                );
+                Ok(true)
+            }
+            None => {
+                debug!(task_id = %task_id, "Failed timer no longer held by this attempt");
+                Ok(false)
+            }
         }
-
-        Ok(())
     }
 
     /// Cancel a timer task
@@ -665,7 +648,6 @@ mod tests {
 
         assert!(task.is_pending());
         assert!(!task.is_processing());
-        assert!(task.can_retry());
         assert!(!task.is_ready()); // Not ready yet (60 seconds in future)
     }
 

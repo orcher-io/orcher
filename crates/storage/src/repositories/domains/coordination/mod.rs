@@ -191,7 +191,7 @@ impl CoordinationRepositoryTrait for CoordinationRepository {
     }
 
     async fn fail_timer_task(&self, task_id: Uuid, error_message: String) -> OrcherResult<()> {
-        self.timer.fail(task_id, error_message).await
+        self.timer.fail(task_id, error_message).await.map(|_| ())
     }
 
     async fn cancel_timer_task(&self, task_id: Uuid) -> OrcherResult<()> {

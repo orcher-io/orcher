@@ -292,10 +292,8 @@ pub trait CoordinationRepositoryTrait: Send + Sync {
     /// * `task_id` - The task ID
     async fn complete_timer_task(&self, task_id: Uuid) -> OrcherResult<()>;
 
-    /// Mark a timer task as failed
-    ///
-    /// If the task has remaining retries, it will be rescheduled.
-    /// Otherwise, it will be moved to the dead letter queue.
+    /// Put a timer task whose fire failed back in the queue, due again after
+    /// a backoff. A timer is retried until it fires.
     ///
     /// # Arguments
     ///

@@ -461,6 +461,11 @@ pub mod sql {
         /// for within one autovacuum round, however large the outbox.
         pub const V089_OUTBOX_ANALYZED_AFTER_A_THOUSAND_CHANGES: &str =
             include_str!("sql/postgres/V089__outbox_analyzed_after_a_thousand_changes.sql");
+
+        /// V090 — a timer's attempts are not capped: a timer whose fire fails
+        /// is retried after a backoff until it fires.
+        pub const V090_TIMERS_RETRIED_UNTIL_THEY_FIRE: &str =
+            include_str!("sql/postgres/V090__timers_retried_until_they_fire.sql");
     }
 }
 

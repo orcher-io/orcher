@@ -3,7 +3,7 @@
 use crate::engine::dispatch::PollingManager;
 use crate::engine::queues::TimerTask;
 use crate::workflows::JournalService;
-use orcher_common::{error::OrcherError, OrcherResult};
+use orcher_common::OrcherResult;
 use orcher_storage::repositories::domains::workflow_execution::WorkflowExecutionRepository;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
@@ -54,14 +54,22 @@ impl TimerExecutionService {
             .unwrap_or("unknown")
             .to_string();
 
-        // Fetch workflow execution to get execution_id, namespace, task_queue
-        let execution = self
+        // Fetch workflow execution to get execution_id, namespace, task_queue.
+        // A run that no longer exists — removed by retention — has nothing to
+        // resume. Failing here would retry the timer for good, as a fire is
+        // retried until it succeeds.
+        let Some(execution) = self
             .workflow_execution_repository
             .find_by_id(task.workflow_id)
             .await?
-            .ok_or_else(|| {
-                OrcherError::not_found("WorkflowExecution", task.workflow_id.to_string())
-            })?;
+        else {
+            debug!(
+                task_id = %task.task_id,
+                workflow_id = %task.workflow_id,
+                "Workflow no longer exists, skipping timer fire"
+            );
+            return Ok(());
+        };
 
         // Skip a run that has ended, or failed and is waiting for a retry: there
         // is nothing for the timer to resume. The list here used to be its own,
