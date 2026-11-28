@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.7.7](https://github.com/orcher-io/orcher/compare/v0.7.6...v0.7.7) (2026-11-28)
+
+
+### Features
+
+* **image:** bundle dashboard 0.3.0 ([#96](https://github.com/orcher-io/orcher/issues/96)) ([1e16c48](https://github.com/orcher-io/orcher/commit/1e16c488e40709a63aaadd13f27ca352c8a656c6)), closes [#94](https://github.com/orcher-io/orcher/issues/94)
+
+
+### Bug Fixes
+
+* **core:** a reset run takes the children its history started ([#101](https://github.com/orcher-io/orcher/issues/101)) ([ed7bb9c](https://github.com/orcher-io/orcher/commit/ed7bb9ca338bed7670b42807359148075a4aa123))
+* **engine:** reset a run in one transaction ([#95](https://github.com/orcher-io/orcher/issues/95)) ([d0104a3](https://github.com/orcher-io/orcher/commit/d0104a3518059bce78c1fee64af54c3b7018f791))
+* **orchestrator:** default omitted server, storage, logging, and health sections ([#81](https://github.com/orcher-io/orcher/issues/81)) ([#85](https://github.com/orcher-io/orcher/issues/85)) ([3475937](https://github.com/orcher-io/orcher/commit/34759372e018144593352e463dd9ab783c26f790))
+* **workers:** age out workers that died before their first stored heartbeat ([#100](https://github.com/orcher-io/orcher/issues/100)) ([80adb4e](https://github.com/orcher-io/orcher/commit/80adb4e6a125c5fdeedc79520b0142af61b2c3a1))
+
 ## [0.7.6](https://github.com/orcher-io/orcher/compare/v0.7.5...v0.7.6) (2026-11-24)
 
 
